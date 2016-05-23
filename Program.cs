@@ -20,10 +20,15 @@ namespace Theorem
             {
                 httpClient.BaseAddress = new Uri("https://slack.com/api/");
                 var startResult = await httpClient.GetAsync("rtm.start?token=TOKENHERE");
-                var startString = await startResult.Content.ReadAsStringAsync();
-                var test = JsonConvert.DeserializeObject("{hello: true}");
-                var startResponse = JsonConvert.DeserializeObject<StartResponseModel>(startString);
-                Console.WriteLine(startResponse.Url);
+                var startStringResult = await startResult.Content.ReadAsStringAsync();
+                var startResponse = JsonConvert.DeserializeObject<StartResponseModel>(startStringResult);
+                if (startResult.IsSuccessStatusCode && startResponse.Ok)
+                {
+                    Console.WriteLine(startResponse.Url);
+                } else
+                {
+                    throw new Exception("Failed to open connection via rtm.start."); //TODO: Better error handling.
+                }
             }
         }
     }
