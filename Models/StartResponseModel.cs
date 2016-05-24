@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Newtonsoft.Json;
 
 namespace Theorem.Models
@@ -9,5 +10,11 @@ namespace Theorem.Models
         
         [JsonProperty("url")]
         public string Url { get; set; }
+        
+        [JsonProperty("users")]
+        public List<UserModel> Users { get; set; }
+        
+        [JsonProperty("channels")]
+        public List<ChannelModel> Channels { get; set; }
     }
 }
