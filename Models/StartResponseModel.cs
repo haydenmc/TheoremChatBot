@@ -11,6 +11,9 @@ namespace Theorem.Models
         [JsonProperty("url")]
         public string Url { get; set; }
         
+        [JsonProperty("self")]
+        public SelfModel Self { get; set; }
+        
         [JsonProperty("users")]
         public List<UserModel> Users { get; set; }
         
