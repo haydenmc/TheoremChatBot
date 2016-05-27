@@ -19,7 +19,14 @@ namespace Theorem.Middleware
         private readonly double _percentRhymingProbability = 0.1;
         private readonly double _percentRhymingWordsRequired = 0.5;
         private readonly int _maxWordsToRhyme = 12;
+        private readonly int _minRhymeScore = 250;
         private const string _wordMatchPattern = @"[a-zA-Z']+";
+        
+        private class RhymeMatch
+        {
+            public int Index;
+            public string Word;
+        }
         
         public RhymingMiddleware(SlackProvider slackProvider, IConfigurationRoot configuration)
         {
@@ -45,16 +52,19 @@ namespace Theorem.Middleware
             if (message.UserId != _slackProvider.Self.Id && random.NextDouble() < _percentRhymingProbability)
             {
                 // Split up sentence into words
-                var originalWords = Regex.Matches(message.Text, _wordMatchPattern).Cast<Match>().Select(m => m.Value).ToArray();
-                if (originalWords.Length > _maxWordsToRhyme)
+                var originalWordMatches = Regex
+                    .Matches(message.Text, _wordMatchPattern)
+                    .Cast<Match>()
+                    .Select(m => new RhymeMatch() { Index = m.Index, Word = m.Value })
+                    .ToList();
+                if (originalWordMatches.Count > _maxWordsToRhyme)
                 {
                     return MiddlewareResult.Continue;
                 }
                 
-                // Let's see if we can find rhymes
-                var rhymes = new string[originalWords.Length];
+                // Generate a query string for the API
                 var queryString = new StringBuilder("");
-                for (var i = 0; i < originalWords.Length; i++)
+                for (var i = 0; i < originalWordMatches.Count; i++)
                 {
                     if (i > 0)
                     {
@@ -64,37 +74,54 @@ namespace Theorem.Middleware
                     {
                         queryString.Append("?function=getRhymes");
                     }
-                    queryString.Append("&word=").Append(Uri.EscapeDataString(originalWords[i]));
+                    queryString.Append("&word=").Append(Uri.EscapeUriString(originalWordMatches[i].Word));
                 }
+                
+                // Run the query
                 using (var httpClient = new HttpClient())
                 {
                     httpClient.BaseAddress = new Uri(_rhymeApiBaseUrl);
                     var result = httpClient.GetAsync(queryString.ToString()).Result;
                     var resultStr = result.Content.ReadAsStringAsync().Result;
                     var resultRhymes = JsonConvert.DeserializeObject<List<List<RhymeModel>>>(resultStr);
+                    var newMessage = message.Text;
+                    int wordsRhymed = 0;
                     for (var i = 0; i < resultRhymes.Count; i++)
                     {
                         var wordRhymes = resultRhymes[i];
-                        var syllables = CountSyllables(originalWords[i]);
+                        var syllables = CountSyllables(originalWordMatches[i].Word);
                         var rhymingWord = wordRhymes
                             .Where(w => w.Syllables == syllables)
-                            .Where(w => w.Score > 200)
+                            .Where(w => w.Score > _minRhymeScore)
                             .OrderByDescending(w => w.Score)
                             .Take(10)
-                            .OrderBy(r => random.Next())
+                            .OrderBy(r => Guid.NewGuid())
                             .FirstOrDefault();
                         if (rhymingWord != null)
                         {
-                            rhymes[i] = rhymingWord.Word;
-                        }
-                        else
-                        {
-                            rhymes[i] = originalWords[i];
+                            // Get length delta
+                            int lengthDelta = rhymingWord.Word.Length - originalWordMatches[i].Word.Length;
+                            // Replace it!
+                            newMessage = newMessage
+                                .Remove(originalWordMatches[i].Index, originalWordMatches[i].Word.Length)
+                                .Insert(originalWordMatches[i].Index, rhymingWord.Word);
+                            // Bump indexes of other words
+                            for (var j = i + 1; j < originalWordMatches.Count; j++)
+                            {
+                                originalWordMatches[j].Index += lengthDelta;
+                            }
+                            wordsRhymed++;
                         }
                     }
-                    // TODO: Replace original words with new rhyming words, send message.
+                    // Make sure we've successfully rhymed enough words.
+                    if (wordsRhymed / (double)originalWordMatches.Count < _percentRhymingWordsRequired)
+                    {
+                        return MiddlewareResult.Continue;
+                    }
+                    // Send the result!
+                    _slackProvider.SendMessageToChannelId(message.ChannelId, newMessage).Wait();
+                    return MiddlewareResult.Continue;
                 }
-                return MiddlewareResult.Continue;
             }
             return MiddlewareResult.Continue;
         }
@@ -109,7 +136,7 @@ namespace Theorem.Middleware
         private int CountSyllables(string word)
         {
             char[] vowels = { 'a', 'e', 'i', 'o', 'u', 'y' };
-            string currentWord = word;
+            string currentWord = word.ToLowerInvariant();
             int numVowels = 0;
             bool lastWasVowel = false;
             foreach (char wc in currentWord)

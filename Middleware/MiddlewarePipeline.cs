@@ -22,9 +22,17 @@ namespace Theorem.Middleware
         {
             foreach (var middleware in _middleware)
             {
-                if (middleware.ProcessMessage(message) == MiddlewareResult.Stop)
+                try 
                 {
-                    break;
+                    var result = middleware.ProcessMessage(message);
+                    if (result == MiddlewareResult.Stop)
+                    {
+                        break;
+                    }
+                }
+                catch (Exception e)
+                {
+                    Console.Error.WriteLine($"Exception while executing {middleware.GetType().Name} middleware: {e.Message}");
                 }
             }
         }
