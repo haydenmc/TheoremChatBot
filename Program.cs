@@ -40,7 +40,7 @@ namespace Theorem
             containerBuilder.RegisterInstance(Configuration).As<IConfigurationRoot>();
             containerBuilder.RegisterType<SlackProvider>().SingleInstance();
             // Middleware
-            // containerBuilder.RegisterType<RhymingMiddleware>().As<IMiddleware>(); // Take this out for now.
+            containerBuilder.RegisterType<RhymingMiddleware>().As<IMiddleware>(); // Take this out for now.
             containerBuilder.RegisterType<WhatSheSaidMiddleware>().As<IMiddleware>();
             containerBuilder.RegisterType<MiddlewarePipeline>().SingleInstance().AutoActivate();
             // Construct IoC container
