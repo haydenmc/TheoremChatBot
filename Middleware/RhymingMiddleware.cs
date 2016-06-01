@@ -16,8 +16,8 @@ namespace Theorem.Middleware
         private IConfigurationRoot _configuration { get; set; }
         private SlackProvider _slackProvider { get; set; }
         private const string _rhymeApiBaseUrl = "http://rhymebrain.com/talk";
-        private readonly double _percentRhymingProbability = 0.1;
-        private readonly double _percentRhymingWordsRequired = 0.5;
+        private readonly double _percentRhymingProbability = 0.05;
+        private readonly double _percentRhymingWordsRequired = 0.6;
         private readonly int _maxWordsToRhyme = 12;
         private readonly int _minRhymeScore = 250;
         private const string _wordMatchPattern = @"[a-zA-Z']+";
