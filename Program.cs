@@ -38,6 +38,7 @@ namespace Theorem
             // Register dependencies
             var containerBuilder = new ContainerBuilder();
             containerBuilder.RegisterInstance(Configuration).As<IConfigurationRoot>();
+            containerBuilder.RegisterType<ApplicationDbContext>().InstancePerDependency();
             containerBuilder.RegisterType<SlackProvider>().SingleInstance();
             // Middleware
             containerBuilder.RegisterType<RhymingMiddleware>().As<IMiddleware>(); // Take this out for now.
@@ -47,7 +48,10 @@ namespace Theorem
             _iocContainer = containerBuilder.Build();
             
             // Connect to Slack!
-            await _iocContainer.Resolve<SlackProvider>().Connect();
+            using(var scope = _iocContainer.BeginLifetimeScope())
+            {
+                await scope.Resolve<SlackProvider>().Connect();
+            }
         }
     }
 }

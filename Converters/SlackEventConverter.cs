@@ -2,10 +2,11 @@ using System;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Theorem.Models;
+using Theorem.Models.Events;
 
 namespace Theorem.Converters
 {
-    public class SlackEventConverter : JsonCreationConverter<SlackEventModel>
+    public class SlackEventConverter : JsonCreationConverter<EventModel>
     {
         public new bool CanWrite = false;
         
@@ -23,7 +24,7 @@ namespace Theorem.Converters
                     return typeof(MessageEventModel);
             }
 
-            return typeof(SlackEventModel);
+            return typeof(EventModel);
         }
     }
 }

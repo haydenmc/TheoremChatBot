@@ -49,7 +49,7 @@ namespace Theorem.Middleware
         public MiddlewareResult ProcessMessage(MessageEventModel message)
         {
             Random random = new Random();
-            if (message.UserId != _slackProvider.Self.Id && random.NextDouble() < _percentRhymingProbability)
+            if (message.SlackUserId != _slackProvider.Self.Id && random.NextDouble() < _percentRhymingProbability)
             {
                 // Split up sentence into words
                 var originalWordMatches = Regex
@@ -119,7 +119,7 @@ namespace Theorem.Middleware
                         return MiddlewareResult.Continue;
                     }
                     // Send the result!
-                    _slackProvider.SendMessageToChannelId(message.ChannelId, newMessage).Wait();
+                    _slackProvider.SendMessageToChannelId(message.SlackChannelId, newMessage).Wait();
                     return MiddlewareResult.Continue;
                 }
             }

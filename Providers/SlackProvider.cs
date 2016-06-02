@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Theorem.Converters;
 using Theorem.Models;
+using Theorem.Models.Events;
 
 namespace Theorem.Providers
 {
@@ -38,6 +39,11 @@ namespace Theorem.Providers
                 return _configuration["Slack:ApiToken"];
             }
         }
+        
+        /// <summary>
+        /// Returns a new db context to use for interacting with the database
+        /// </summary>
+        private Func<ApplicationDbContext> _dbContext { get; set; }
         
         /// <summary>
         /// Keeps track of the web socket URL to connect Slack via
@@ -71,9 +77,10 @@ namespace Theorem.Providers
         /// Constructs a new instance of SlackProvider, requires configuration for things like API token
         /// </summary>
         /// <param name="configuration">Configuration object</param>
-        public SlackProvider(IConfigurationRoot configuration)
+        public SlackProvider(IConfigurationRoot configuration, Func<ApplicationDbContext> dbContext)
         {
             _configuration = configuration;
+            _dbContext = dbContext;
             _messageDeserializationSettings = new JsonSerializerSettings();
             _messageDeserializationSettings.Converters.Add(new SlackEventConverter());
         }
@@ -128,7 +135,7 @@ namespace Theorem.Providers
                     messageString.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
                 } while (!result.EndOfMessage);
                 
-                var slackEvent = JsonConvert.DeserializeObject<SlackEventModel>(messageString.ToString(), _messageDeserializationSettings);
+                var slackEvent = JsonConvert.DeserializeObject<EventModel>(messageString.ToString(), _messageDeserializationSettings);
                 if (slackEvent is MessageEventModel)
                 {
                     OnNewMessage((MessageEventModel)slackEvent);

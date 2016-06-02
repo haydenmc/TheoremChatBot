@@ -1,16 +1,17 @@
 using System;
 using Newtonsoft.Json;
 using Theorem.Converters;
+using Theorem.Models.Events;
 
 namespace Theorem.Models
 {
-    public class MessageEventModel : SlackEventModel
+    public class MessageEventModel : EventModel
     {
         [JsonProperty("channel")]
-        public string ChannelId { get; set; }
+        public string SlackChannelId { get; set; }
         
         [JsonProperty("user")]
-        public string UserId { get; set; }
+        public string SlackUserId { get; set; }
         
         [JsonProperty("text")]
         public string Text { get; set; }

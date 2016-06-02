@@ -17,10 +17,10 @@ namespace Theorem.Middleware
         public MiddlewareResult ProcessMessage(MessageEventModel message)
         {
             Random random = new Random();
-            if (message.UserId != _slackProvider.Self.Id && random.NextDouble() < _chanceOfSheSaid)
+            if (message.SlackUserId != _slackProvider.Self.Id && random.NextDouble() < _chanceOfSheSaid)
             {
-                var user = _slackProvider.UsersById[message.UserId];
-                _slackProvider.SendMessageToChannelId(message.ChannelId, $"@{user.Name} That's what she said.").Wait();
+                var user = _slackProvider.UsersById[message.SlackUserId];
+                _slackProvider.SendMessageToChannelId(message.SlackChannelId, $"@{user.Name} That's what she said.").Wait();
             }
             return MiddlewareResult.Continue;
         }
