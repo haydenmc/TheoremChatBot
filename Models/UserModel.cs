@@ -1,43 +1,33 @@
-using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Theorem.Models
 {
     public class UserModel
     {
-        [JsonProperty("id")]
-        public string Id { get; set; }
-        
-        [JsonProperty("name")]
+        public Guid Id { get; set; }
+        public string SlackId { get; set; }
         public string Name { get; set; }
-        
-        [JsonProperty("deleted")]
         public bool Deleted { get; set; }
-        
-        [JsonProperty("profile")]
-        public UserProfileModel Profile { get; set; }
-        
-        [JsonProperty("is_admin")]
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string RealName { get; set; }
+        public string Email { get; set; }
+        public string Skype { get; set; }
+        public string Phone { get; set; }
+        public string Image512 { get; set; }
         public bool IsAdmin { get; set; }
-        
-        [JsonProperty("is_owner")]
         public bool IsOwner { get; set; }
-        
-        [JsonProperty("is_primary_owner")]
         public bool IsPrimaryOwner { get; set; }
-        
-        [JsonProperty("is_unrestricted")]
         public bool IsUnrestricted { get; set; }
-        
-        [JsonProperty("is_ultra_unrestricted")]
         public bool IsUltraUnrestricted { get; set; }
-        
-        [JsonProperty("has_2fa")]
         public bool HasTwoFactorAuth { get; set; }
-        
-        [JsonProperty("two_factor_type")]
         public string TwoFactorType { get; set; }
-        
-        [JsonProperty("has_files")]
         public bool HasFiles { get; set; }
+        [InverseProperty("Member")]
+        public virtual ICollection<ChannelMemberModel> Channels { get; set; }
+        [InverseProperty("User")]
+        public virtual ICollection<MessageEventModel> Messages { get; set; }
     }
 }

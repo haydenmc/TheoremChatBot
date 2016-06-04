@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace Theorem.Models
+namespace Theorem.Models.Slack
 {
-    public class StartResponseModel
+    public class SlackStartResponseModel
     {
         [JsonProperty("ok")]
         public bool Ok { get; set; }
@@ -12,12 +12,12 @@ namespace Theorem.Models
         public string Url { get; set; }
         
         [JsonProperty("self")]
-        public SelfModel Self { get; set; }
+        public SlackSelfModel Self { get; set; }
         
         [JsonProperty("users")]
-        public List<UserModel> Users { get; set; }
+        public List<SlackUserModel> Users { get; set; }
         
         [JsonProperty("channels")]
-        public List<ChannelModel> Channels { get; set; }
+        public List<SlackChannelModel> Channels { get; set; }
     }
 }

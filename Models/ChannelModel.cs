@@ -1,57 +1,29 @@
 using System;
 using System.Collections.Generic;
-using Newtonsoft.Json;
-using Theorem.Converters;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Theorem.Models
 {
     public class ChannelModel
     {
-        [JsonProperty("id")]
-        public string Id { get; set; }
-        
-        [JsonProperty("name")]
+        public Guid Id { get; set; }
+        public string SlackId { get; set; }
         public string Name { get; set; }
-        
-        [JsonProperty("is_channel")]
         public bool IsChannel { get; set; }
-        
-        [JsonProperty("created")]
-        [JsonConverter(typeof(UnixDateTimeConverter))]
-        public DateTime TimeCreated { get; set; }
-        
-        [JsonProperty("creator")]
-        public string CreatorId { get; set; }
-        
-        [JsonProperty("is_archived")]
+        public DateTimeOffset TimeCreated { get; set; }
+        public string CreatorSlackId { get; set; }
+        [ForeignKey("CreatorId")]
+        public UserModel Creator { get; set; }
+        public Guid CreatorId { get; set; }
         public bool IsArchived { get; set; }
-        
-        [JsonProperty("is_general")]
         public bool IsGeneral { get; set; }
-        
-        [JsonProperty("members")]
-        public List<string> MemberIds { get; set; }
-        
-        [JsonProperty("topic")]
-        public ChannelValueModel Topic { get; set; }
-        
-        [JsonProperty("purpose")]
-        public ChannelValueModel Purpose { get; set; }
-        
-        [JsonProperty("is_member")]
+        [InverseProperty("Channel")]
+        public virtual ICollection<ChannelMemberModel> ChannelMembers { get; set; }
+        public string Topic { get; set; }
+        public string Purpose { get; set; }
         public bool IsMember { get; set; }
-        
-        [JsonProperty("last_read")]
-        [JsonConverter(typeof(UnixDateTimeConverter))]
-        public DateTime TimeLastRead { get; set; }
-        
-        [JsonProperty("latest")]
-        public MessageModel LatestMessage { get; set; }
-        
-        [JsonProperty("unread_count")]
-        public int UnreadCount { get; set; }
-        
-        [JsonProperty("unread_count_display")]
-        public int UnreadCountDisplay { get; set; }
+        public DateTimeOffset TimeLastRead { get; set; }
+        [InverseProperty("Channel")]
+        public virtual ICollection<MessageEventModel> Messages { get; set; }
     }
 }

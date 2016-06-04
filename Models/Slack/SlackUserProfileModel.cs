@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace Theorem.Models
+namespace Theorem.Models.Slack
 {
     public class UserProfileModel
     {

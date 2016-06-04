@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Autofac;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Theorem.Middleware;
@@ -47,9 +48,14 @@ namespace Theorem
             // Construct IoC container
             _iocContainer = containerBuilder.Build();
             
-            // Connect to Slack!
             using(var scope = _iocContainer.BeginLifetimeScope())
             {
+                // Trigger database migrations
+                using (var db = scope.Resolve<ApplicationDbContext>())
+                {
+                    db.Database.Migrate();
+                }
+                // Connect to Slack!
                 await scope.Resolve<SlackProvider>().Connect();
             }
         }

@@ -2,9 +2,9 @@ using System;
 using Newtonsoft.Json;
 using Theorem.Converters;
 
-namespace Theorem.Models
+namespace Theorem.Models.Slack
 {
-    public class ChannelValueModel
+    public class SlackChannelValueModel
     {
         [JsonProperty("value")]
         public string Value { get; set; }

@@ -1,8 +1,8 @@
 using Newtonsoft.Json;
 
-namespace Theorem.Models
+namespace Theorem.Models.Slack
 {
-    public class SelfModel
+    public class SlackSelfModel
     {
         [JsonProperty("id")]
         public string Id { get; set; }

@@ -11,6 +11,7 @@ using Newtonsoft.Json;
 using Theorem.Converters;
 using Theorem.Models;
 using Theorem.Models.Events;
+using Theorem.Models.Slack;
 
 namespace Theorem.Providers
 {
@@ -53,18 +54,18 @@ namespace Theorem.Providers
         /// <summary>
         /// Dictionary that keeps track of available channels, keyed on channel id (NOT name)
         /// </summary>
-        public Dictionary<string, ChannelModel> ChannelsById { get; private set; }
+        public Dictionary<string, SlackChannelModel> ChannelsById { get; private set; }
         
         /// <summary>
         /// Dictionary that keeps track of users, keyed on user id (NOT name)
         /// </summary>
         /// <returns></returns>
-        public Dictionary<string, UserModel> UsersById { get; private set; }
+        public Dictionary<string, SlackUserModel> UsersById { get; private set; }
         
         /// <summary>
         /// Information about the authenticated Slack user
         /// </summary>
-        public SelfModel Self { get; private set; }
+        public SlackSelfModel Self { get; private set; }
         
         private JsonSerializerSettings _messageDeserializationSettings { get; set; }
         
@@ -95,7 +96,7 @@ namespace Theorem.Providers
                 httpClient.BaseAddress = new Uri(BaseApiUrl);
                 var startResult = await httpClient.GetAsync($"rtm.start?token={_apiToken}");
                 var startStringResult = await startResult.Content.ReadAsStringAsync();
-                var startResponse = JsonConvert.DeserializeObject<StartResponseModel>(startStringResult);
+                var startResponse = JsonConvert.DeserializeObject<SlackStartResponseModel>(startStringResult);
                 if (!startResult.IsSuccessStatusCode || !startResponse.Ok)
                 {
                     throw new Exception("Failed to open connection via rtm.start."); //TODO: Better error handling.
@@ -106,6 +107,42 @@ namespace Theorem.Providers
                 ChannelsById = startResponse.Channels.ToDictionary(c => c.Id);
                 UsersById = startResponse.Users.ToDictionary(u => u.Id);
                 Self = startResponse.Self;
+                
+                // Commit user and channel information to database
+                using (var db = _dbContext())
+                {
+                    foreach (var user in startResponse.Users)
+                    {
+                        var dbUser = db.Users.SingleOrDefault(u => u.SlackId == user.Id);
+                        if (dbUser == null)
+                        {
+                            dbUser = user.ToUserModel();
+                            dbUser.Id = Guid.NewGuid();
+                            db.Users.Add(dbUser);
+                            await db.SaveChangesAsync();
+                        }
+                        else
+                        {
+                            // TODO: Update the database model with any changed fields
+                        }
+                    }
+                    foreach (var channel in startResponse.Channels)
+                    {
+                        var dbChannel = db.Channels.SingleOrDefault(c => c.SlackId == channel.Id);
+                        if (dbChannel == null)
+                        {
+                            dbChannel = channel.ToChannelModel();
+                            dbChannel.Id = Guid.NewGuid();
+                            dbChannel.Creator = db.Users.SingleOrDefault(u => u.SlackId == dbChannel.CreatorSlackId);
+                            db.Channels.Add(dbChannel);
+                            await db.SaveChangesAsync();
+                        }
+                        else
+                        {
+                            // TODO: Update the database model with any changed fields
+                        }
+                    }
+                }
                 
                 // Connect to websocket endpoint
                 var webSocketClient = new ClientWebSocket();
@@ -138,7 +175,16 @@ namespace Theorem.Providers
                 var slackEvent = JsonConvert.DeserializeObject<EventModel>(messageString.ToString(), _messageDeserializationSettings);
                 if (slackEvent is MessageEventModel)
                 {
-                    OnNewMessage((MessageEventModel)slackEvent);
+                    using (var db = _dbContext())
+                    {
+                        var dbMessage = (MessageEventModel)slackEvent;
+                        dbMessage.Id = Guid.NewGuid();
+                        dbMessage.Channel = db.Channels.SingleOrDefault(c => c.SlackId == dbMessage.SlackChannelId);
+                        dbMessage.User = db.Users.SingleOrDefault(u => u.SlackId == dbMessage.SlackUserId);
+                        db.MessageEvents.Add(dbMessage);
+                        await db.SaveChangesAsync();
+                        OnNewMessage((MessageEventModel)slackEvent);
+                    }
                 }
                 else
                 {
