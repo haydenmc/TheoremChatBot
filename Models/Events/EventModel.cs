@@ -11,9 +11,17 @@ namespace Theorem.Models.Events
         [JsonProperty("type")]
         public string SlackEventType { get; set; }
         
+        [NotMapped]
+        [JsonProperty("user")]
+        public string SlackUserId { get; set; }
+
         [ForeignKey("UserId")]
         public UserModel User { get; set; }
         public Guid? UserId { get; set; }
+        
+        [NotMapped]
+        [JsonProperty("channel")]
+        public string SlackChannelId { get; set; }
         
         [ForeignKey("ChannelId")]
         public ChannelModel Channel { get; set; }

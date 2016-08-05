@@ -15,6 +15,7 @@ namespace Theorem.Models
         public DbSet<EventModel> Events { get; set; }
         public DbSet<MessageEventModel> MessageEvents { get; set; }
         public DbSet<PresenceChangeEventModel> PresenceChangeEvents { get; set; }
+        public DbSet<TypingEventModel> TypingEvents { get; set; }
         
         public ApplicationDbContext() : base() 
         {

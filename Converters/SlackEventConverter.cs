@@ -22,6 +22,10 @@ namespace Theorem.Converters
             {
                 case "message":
                     return typeof(MessageEventModel);
+                case "presence_change":
+                    return typeof(PresenceChangeEventModel);
+                case "user_typing":
+                    return typeof(TypingEventModel);
             }
 
             return typeof(EventModel);
