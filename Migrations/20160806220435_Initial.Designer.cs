@@ -8,7 +8,7 @@ using Theorem.Models;
 namespace TheoremSlackBot.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20160805071201_Initial")]
+    [Migration("20160806220435_Initial")]
     partial class Initial
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -82,6 +82,8 @@ namespace TheoremSlackBot.Migrations
                         .IsRequired();
 
                     b.Property<string>("SlackEventType");
+
+                    b.Property<DateTimeOffset>("TimeReceived");
 
                     b.Property<Guid?>("UserId");
 

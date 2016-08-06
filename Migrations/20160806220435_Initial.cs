@@ -98,6 +98,7 @@ namespace TheoremSlackBot.Migrations
                     ChannelId = table.Column<Guid>(nullable: true),
                     Discriminator = table.Column<string>(nullable: false),
                     SlackEventType = table.Column<string>(nullable: true),
+                    TimeReceived = table.Column<DateTimeOffset>(nullable: false),
                     UserId = table.Column<Guid>(nullable: true),
                     Presence = table.Column<string>(nullable: true),
                     ChannelModelId = table.Column<Guid>(nullable: true),

@@ -184,40 +184,35 @@ namespace Theorem.Providers
         /// <param name="slackEvent">The parsed Slack event</param>
         private async Task HandleSlackEvent(EventModel slackEvent)
         {
-            if (slackEvent is MessageEventModel)
+            using (var db = _dbContext())
             {
-                using (var db = _dbContext())
+                // Populate generic fields from database
+                slackEvent.Id = Guid.NewGuid();
+                slackEvent.Channel = db.Channels.SingleOrDefault(c => c.SlackId == slackEvent.SlackChannelId);
+                slackEvent.User = db.Users.SingleOrDefault(u => u.SlackId == slackEvent.SlackUserId);
+                slackEvent.TimeReceived = DateTimeOffset.Now;
+
+                if (slackEvent is MessageEventModel)
                 {
                     var dbMessage = (MessageEventModel)slackEvent;
-                    dbMessage.Id = Guid.NewGuid();
-                    dbMessage.Channel = db.Channels.SingleOrDefault(c => c.SlackId == dbMessage.SlackChannelId);
-                    dbMessage.User = db.Users.SingleOrDefault(u => u.SlackId == dbMessage.SlackUserId);
                     db.MessageEvents.Add(dbMessage);
                     await db.SaveChangesAsync();
                     OnNewMessage((MessageEventModel)slackEvent);
                 }
-            }
-            else if (slackEvent is PresenceChangeEventModel)
-            {
-                using (var db = _dbContext())
+                else if (slackEvent is PresenceChangeEventModel)
                 {
-                    var dbPresenceChangeEvent = (PresenceChangeEventModel)slackEvent;
-                    dbPresenceChangeEvent.Id = Guid.NewGuid();
-                    dbPresenceChangeEvent.Channel = db.Channels.SingleOrDefault(c => c.SlackId == dbPresenceChangeEvent.SlackChannelId);
-                    dbPresenceChangeEvent.User = db.Users.SingleOrDefault(u => u.SlackId == dbPresenceChangeEvent.SlackUserId);
-                    db.PresenceChangeEvents.Add(dbPresenceChangeEvent);
+                    db.PresenceChangeEvents.Add(slackEvent as PresenceChangeEventModel);
                     await db.SaveChangesAsync();
                 }
-            }
-            else if (slackEvent is TypingEventModel)
-            {
-                using (var db = _dbContext())
+                else if (slackEvent is TypingEventModel)
                 {
-                    var dbTypingEvent = (TypingEventModel)slackEvent;
-                    dbTypingEvent.Id = Guid.NewGuid();
-                    dbTypingEvent.Channel = db.Channels.SingleOrDefault(c => c.SlackId == dbTypingEvent.SlackChannelId);
-                    dbTypingEvent.User = db.Users.SingleOrDefault(u => u.SlackId == dbTypingEvent.SlackUserId);
-                    db.TypingEvents.Add(dbTypingEvent);
+                    db.TypingEvents.Add(slackEvent as TypingEventModel);
+                    await db.SaveChangesAsync();
+                }
+                else
+                {
+                    // Generic events
+                    db.Events.Add(slackEvent);
                     await db.SaveChangesAsync();
                 }
             }

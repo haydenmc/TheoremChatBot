@@ -8,6 +8,7 @@ using Theorem.Providers;
 using System.Linq;
 using System.Net.Http;
 using Newtonsoft.Json;
+using Theorem.Models.Events;
 
 namespace Theorem.Middleware
 {

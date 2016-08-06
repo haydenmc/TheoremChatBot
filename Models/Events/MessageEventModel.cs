@@ -4,7 +4,7 @@ using Newtonsoft.Json;
 using Theorem.Converters;
 using Theorem.Models.Events;
 
-namespace Theorem.Models
+namespace Theorem.Models.Events
 {
     public class MessageEventModel : EventModel
     {

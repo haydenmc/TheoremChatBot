@@ -26,5 +26,8 @@ namespace Theorem.Models.Events
         [ForeignKey("ChannelId")]
         public ChannelModel Channel { get; set; }
         public Guid? ChannelId { get; set; }
+
+        [JsonIgnore]
+        public DateTimeOffset TimeReceived { get; set; }
     }
 }

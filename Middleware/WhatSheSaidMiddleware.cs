@@ -1,5 +1,6 @@
 using System;
 using Theorem.Models;
+using Theorem.Models.Events;
 using Theorem.Providers;
 
 namespace Theorem.Middleware

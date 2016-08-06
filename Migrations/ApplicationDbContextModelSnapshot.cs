@@ -82,6 +82,8 @@ namespace TheoremSlackBot.Migrations
 
                     b.Property<string>("SlackEventType");
 
+                    b.Property<DateTimeOffset>("TimeReceived");
+
                     b.Property<Guid?>("UserId");
 
                     b.HasKey("Id");

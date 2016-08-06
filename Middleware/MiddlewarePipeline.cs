@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Autofac;
 using Theorem.Models;
+using Theorem.Models.Events;
 using Theorem.Providers;
 
 namespace Theorem.Middleware
