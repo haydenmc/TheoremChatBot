@@ -19,5 +19,8 @@ namespace Theorem.Models.Slack
         
         [JsonProperty("channels")]
         public List<SlackChannelModel> Channels { get; set; }
+
+        [JsonProperty("ims")]
+        public List<SlackImModel> Ims { get; set; }
     }
 }

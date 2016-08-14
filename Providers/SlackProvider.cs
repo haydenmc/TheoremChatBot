@@ -55,6 +55,11 @@ namespace Theorem.Providers
         /// Dictionary that keeps track of available channels, keyed on channel id (NOT name)
         /// </summary>
         public Dictionary<string, SlackChannelModel> ChannelsById { get; private set; }
+
+        /// <summary>
+        /// Dictionary of instant messages, keyed by id
+        /// </summary>
+        public Dictionary<string, SlackImModel> ImsById { get; private set; }
         
         /// <summary>
         /// Dictionary that keeps track of users, keyed on user id (NOT name)
@@ -106,6 +111,7 @@ namespace Theorem.Providers
                 _webSocketUrl = startResponse.Url;
                 ChannelsById = startResponse.Channels.ToDictionary(c => c.Id);
                 UsersById = startResponse.Users.ToDictionary(u => u.Id);
+                ImsById = startResponse.Ims.ToDictionary(i => i.Id);
                 Self = startResponse.Self;
                 
                 // Commit user and channel information to database
