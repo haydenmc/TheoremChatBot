@@ -42,6 +42,7 @@ namespace Theorem
             containerBuilder.RegisterType<ApplicationDbContext>().InstancePerDependency();
             containerBuilder.RegisterType<SlackProvider>().SingleInstance();
             // Middleware
+            containerBuilder.RegisterType<HikingMiddleware>().As<IMiddleware>();
             containerBuilder.RegisterType<SeenMiddleware>().As<IMiddleware>();
             containerBuilder.RegisterType<RhymingMiddleware>().As<IMiddleware>();
             containerBuilder.RegisterType<WhatSheSaidMiddleware>().As<IMiddleware>();

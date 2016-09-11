@@ -75,6 +75,11 @@ namespace Theorem.Providers
         private JsonSerializerSettings _messageDeserializationSettings { get; set; }
         
         /// <summary>
+        /// Event that fires when connected
+        /// </summary>
+        public event EventHandler<EventArgs> Connected;
+
+        /// <summary>
         /// Event that fires on receipt of a new message
         /// </summary>
         public event EventHandler<MessageEventModel> NewMessage;
@@ -153,7 +158,7 @@ namespace Theorem.Providers
                 // Connect to websocket endpoint
                 var webSocketClient = new ClientWebSocket();
                 await webSocketClient.ConnectAsync(new Uri(_webSocketUrl), CancellationToken.None);
-                await Task.WhenAll(Receive(webSocketClient));
+                await Task.WhenAll(receive(webSocketClient));
             }
         }
         
@@ -161,8 +166,9 @@ namespace Theorem.Providers
         /// Processes raw incoming websocket data from Slack
         /// </summary>
         /// <param name="webSocketClient">The web socket client object receiving from</param>
-        private async Task Receive(ClientWebSocket webSocketClient)
+        private async Task receive(ClientWebSocket webSocketClient)
         {
+            onConnected();
             while (webSocketClient.State == WebSocketState.Open)
             {
                 StringBuilder messageString = new StringBuilder();
@@ -180,7 +186,7 @@ namespace Theorem.Providers
                 
                 var slackEvent = JsonConvert.DeserializeObject<EventModel>(messageString.ToString(), _messageDeserializationSettings);
                 Console.WriteLine(messageString.ToString());
-                await HandleSlackEvent(slackEvent);
+                await handleSlackEvent(slackEvent);
             }
         }
 
@@ -188,7 +194,7 @@ namespace Theorem.Providers
         /// Processes events received from Slack.
         /// </summary>
         /// <param name="slackEvent">The parsed Slack event</param>
-        private async Task HandleSlackEvent(EventModel slackEvent)
+        private async Task handleSlackEvent(EventModel slackEvent)
         {
             using (var db = _dbContext())
             {
@@ -203,7 +209,7 @@ namespace Theorem.Providers
                     var dbMessage = (MessageEventModel)slackEvent;
                     db.MessageEvents.Add(dbMessage);
                     await db.SaveChangesAsync();
-                    OnNewMessage((MessageEventModel)slackEvent);
+                    onNewMessage((MessageEventModel)slackEvent);
                 }
                 else if (slackEvent is PresenceChangeEventModel)
                 {
@@ -246,19 +252,37 @@ namespace Theorem.Providers
         /// </summary>
         /// <param name="channelId">Channel ID</param>
         /// <param name="body">Body of the message</param>
-        public async Task SendMessageToChannelId(string channelId, string body)
+        public async Task SendMessageToChannelId(string channelId, string body, List<SlackAttachmentModel> attachments = null)
         {
             using (var httpClient = new HttpClient())
             {
                 httpClient.BaseAddress = new Uri(BaseApiUrl);
+                var attachmentsStr = "";
+                if (attachments != null)
+                {
+                    attachmentsStr = JsonConvert.SerializeObject(attachments);
+                }
                 var postData = new FormUrlEncodedContent(new[] { 
                     new KeyValuePair<string, string>("token", _apiToken), 
                     new KeyValuePair<string, string>("channel", channelId), 
                     new KeyValuePair<string, string>("text", body),
-                    new KeyValuePair<string, string>("as_user", "true")
+                    new KeyValuePair<string, string>("as_user", "true"),
+                    new KeyValuePair<string, string>("attachments", attachmentsStr)
                 }); 
                 var result = await httpClient.PostAsync("chat.postMessage", postData);
                 // TODO: Parse result, handle errors, retry, etc.
+            }
+        }
+
+        /// <summary>
+        /// Used to raise the Connected event.
+        /// </summary>
+        protected virtual void onConnected()
+        {
+            var eventHandler = Connected;
+            if (eventHandler != null)
+            {
+                eventHandler(this, EventArgs.Empty);
             }
         }
         
@@ -266,7 +290,7 @@ namespace Theorem.Providers
         /// Used to raise the NewMessage event.
         /// </summary>
         /// <param name="message">Event arguments; the message that was received</param>
-        protected virtual void OnNewMessage(MessageEventModel message)
+        protected virtual void onNewMessage(MessageEventModel message)
         {
             var eventHandler = NewMessage;
             if (eventHandler != null)
