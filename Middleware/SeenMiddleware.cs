@@ -94,7 +94,7 @@ namespace Theorem.Middleware
             }
             // Match based on channel/im message
             Match match;
-            if (_slackProvider.ChannelsById.ContainsKey(message.SlackChannelId))
+            if (_slackProvider.GetChannelBySlackId(message.SlackChannelId) != null)
             {
                 match = _messageRegex.Match(message.Text);
             }

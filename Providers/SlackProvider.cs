@@ -6,6 +6,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Theorem.Converters;
@@ -50,22 +51,11 @@ namespace Theorem.Providers
         /// Keeps track of the web socket URL to connect Slack via
         /// </summary>
         private string _webSocketUrl { get; set; }
-        
-        /// <summary>
-        /// Dictionary that keeps track of available channels, keyed on channel id (NOT name)
-        /// </summary>
-        public Dictionary<string, SlackChannelModel> ChannelsById { get; private set; }
 
         /// <summary>
         /// Dictionary of instant messages, keyed by id
         /// </summary>
         public Dictionary<string, SlackImModel> ImsById { get; private set; }
-        
-        /// <summary>
-        /// Dictionary that keeps track of users, keyed on user id (NOT name)
-        /// </summary>
-        /// <returns></returns>
-        public Dictionary<string, SlackUserModel> UsersById { get; private set; }
         
         /// <summary>
         /// Information about the authenticated Slack user
@@ -114,8 +104,6 @@ namespace Theorem.Providers
                 
                 // Save relevant return information
                 _webSocketUrl = startResponse.Url;
-                ChannelsById = startResponse.Channels.ToDictionary(c => c.Id);
-                UsersById = startResponse.Users.ToDictionary(u => u.Id);
                 ImsById = startResponse.Ims.ToDictionary(i => i.Id);
                 Self = startResponse.Self;
                 
@@ -124,34 +112,11 @@ namespace Theorem.Providers
                 {
                     foreach (var user in startResponse.Users)
                     {
-                        var dbUser = db.Users.SingleOrDefault(u => u.SlackId == user.Id);
-                        if (dbUser == null)
-                        {
-                            dbUser = user.ToUserModel();
-                            dbUser.Id = Guid.NewGuid();
-                            db.Users.Add(dbUser);
-                            await db.SaveChangesAsync();
-                        }
-                        else
-                        {
-                            // TODO: Update the database model with any changed fields
-                        }
+                        db.AddOrUpdateDbUser(user);
                     }
                     foreach (var channel in startResponse.Channels)
                     {
-                        var dbChannel = db.Channels.SingleOrDefault(c => c.SlackId == channel.Id);
-                        if (dbChannel == null)
-                        {
-                            dbChannel = channel.ToChannelModel();
-                            dbChannel.Id = Guid.NewGuid();
-                            dbChannel.Creator = db.Users.SingleOrDefault(u => u.SlackId == dbChannel.CreatorSlackId);
-                            db.Channels.Add(dbChannel);
-                            await db.SaveChangesAsync();
-                        }
-                        else
-                        {
-                            // TODO: Update the database model with any changed fields
-                        }
+                        db.AddOrUpdateDbChannel(channel);
                     }
                 }
                 
@@ -204,7 +169,21 @@ namespace Theorem.Providers
                 slackEvent.User = db.Users.SingleOrDefault(u => u.SlackId == slackEvent.SlackUserId);
                 slackEvent.TimeReceived = DateTimeOffset.Now;
 
-                if (slackEvent is MessageEventModel)
+                if (slackEvent is ChannelCreatedEventModel)
+                {
+                    var dbChannelCreated = (ChannelCreatedEventModel)slackEvent;
+                    db.ChannelCreatedEvents.Add(dbChannelCreated);
+                    await db.SaveChangesAsync();
+                }
+                else if (slackEvent is ChannelJoinedEventModel)
+                {
+                    var dbChannelJoined = (ChannelJoinedEventModel)slackEvent;
+                    // Add or update this channel
+                    dbChannelJoined.ChannelId = db.AddOrUpdateDbChannel(dbChannelJoined.SlackChannel).Id;
+                    db.ChannelJoinedEvents.Add(dbChannelJoined);
+                    await db.SaveChangesAsync();
+                }
+                else if (slackEvent is MessageEventModel)
                 {
                     var dbMessage = (MessageEventModel)slackEvent;
                     db.MessageEvents.Add(dbMessage);
@@ -229,6 +208,45 @@ namespace Theorem.Providers
                 }
             }
         }
+
+        /// <summary>
+        /// Queries the database for a user with the specified Slack ID
+        /// </summary>
+        /// <param name="slackUserId">Slack ID of the requested user</param>
+        /// <returns>Databse model of Slack user</returns>
+        public UserModel GetUserBySlackId(string slackUserId)
+        {
+            using (var db = _dbContext())
+            {
+                return db.Users.AsNoTracking().SingleOrDefault(u => u.SlackId == slackUserId);
+            }
+        }
+
+        /// <summary>
+        /// Queries the database for a channel with the specified Slack ID
+        /// </summary>
+        /// <param name="slackId">Slack ID of the requested channel</param>
+        /// <returns>Database model of Slack channel</returns>
+        public ChannelModel GetChannelBySlackId(string slackId)
+        {
+            using (var db = _dbContext())
+            {
+                return db.Channels.AsNoTracking().SingleOrDefault(c => c.SlackId == slackId);
+            }
+        }
+
+        /// <summary>
+        /// Queries the database for a channel with the specified name 
+        /// </summary>
+        /// <param name="channelName">Name of requested channel</param>
+        /// <returns>Databsae model of the Slack channel</returns>
+        public ChannelModel GetChannelByName(string channelName)
+        {
+            using (var db = _dbContext())
+            {
+                return db.Channels.AsNoTracking().SingleOrDefault(c => c.Name.ToUpper() == channelName.ToUpper());
+            }
+        }
         
         /// <summary>
         /// Send a message to the channel with the given name
@@ -238,21 +256,19 @@ namespace Theorem.Providers
         /// <returns></returns>
         public async Task SendMessageToChannelName(string channelName, string body)
         {
-            var targetChannel =
-                ChannelsById.Values
-                .SingleOrDefault(c => c.Name.ToUpperInvariant() == channelName.ToUpperInvariant());
+            var targetChannel = GetChannelByName(channelName);
             if (targetChannel != null)
             {
-                await SendMessageToChannelId(targetChannel.Id, body);
+                await SendMessageToChannelId(targetChannel.SlackId, body);
             }
         }
         
         /// <summary>
         /// Send a message to the channel with the given ID
         /// </summary>
-        /// <param name="channelId">Channel ID</param>
+        /// <param name="channelSlackId">Channel Slack ID</param>
         /// <param name="body">Body of the message</param>
-        public async Task SendMessageToChannelId(string channelId, string body, List<SlackAttachmentModel> attachments = null)
+        public async Task SendMessageToChannelId(string channelSlackId, string body, List<SlackAttachmentModel> attachments = null)
         {
             using (var httpClient = new HttpClient())
             {
@@ -264,7 +280,7 @@ namespace Theorem.Providers
                 }
                 var postData = new FormUrlEncodedContent(new[] { 
                     new KeyValuePair<string, string>("token", _apiToken), 
-                    new KeyValuePair<string, string>("channel", channelId), 
+                    new KeyValuePair<string, string>("channel", channelSlackId), 
                     new KeyValuePair<string, string>("text", body),
                     new KeyValuePair<string, string>("as_user", "true"),
                     new KeyValuePair<string, string>("attachments", attachmentsStr)

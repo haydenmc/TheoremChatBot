@@ -26,6 +26,10 @@ namespace Theorem.Converters
                     return typeof(PresenceChangeEventModel);
                 case "user_typing":
                     return typeof(TypingEventModel);
+                case "channel_joined":
+                    return typeof(ChannelJoinedEventModel);
+                case "channel_created":
+                    return typeof(ChannelCreatedEventModel);
             }
 
             return typeof(EventModel);

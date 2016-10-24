@@ -20,7 +20,7 @@ namespace Theorem.Middleware
             Random random = new Random();
             if (message.SlackUserId != _slackProvider.Self.Id && random.NextDouble() < _chanceOfSheSaid)
             {
-                var user = _slackProvider.UsersById[message.SlackUserId];
+                var user = _slackProvider.GetUserBySlackId(message.SlackUserId);
                 _slackProvider.SendMessageToChannelId(message.SlackChannelId, $"@{user.Name} That's what she said.").Wait();
             }
             return MiddlewareResult.Continue;

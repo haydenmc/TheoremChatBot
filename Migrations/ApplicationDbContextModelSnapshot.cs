@@ -146,18 +146,17 @@ namespace TheoremSlackBot.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("Theorem.Models.Events.PresenceChangeEventModel", b =>
+            modelBuilder.Entity("Theorem.Models.Events.ChannelJoinedEventModel", b =>
                 {
                     b.HasBaseType("Theorem.Models.Events.EventModel");
 
-                    b.Property<string>("Presence");
 
-                    b.ToTable("PresenceChangeEventModel");
+                    b.ToTable("ChannelJoinedEventModel");
 
-                    b.HasDiscriminator().HasValue("PresenceChangeEventModel");
+                    b.HasDiscriminator().HasValue("ChannelJoinedEventModel");
                 });
 
-            modelBuilder.Entity("Theorem.Models.MessageEventModel", b =>
+            modelBuilder.Entity("Theorem.Models.Events.MessageEventModel", b =>
                 {
                     b.HasBaseType("Theorem.Models.Events.EventModel");
 
@@ -180,7 +179,18 @@ namespace TheoremSlackBot.Migrations
                     b.HasDiscriminator().HasValue("MessageEventModel");
                 });
 
-            modelBuilder.Entity("Theorem.Models.TypingEventModel", b =>
+            modelBuilder.Entity("Theorem.Models.Events.PresenceChangeEventModel", b =>
+                {
+                    b.HasBaseType("Theorem.Models.Events.EventModel");
+
+                    b.Property<string>("Presence");
+
+                    b.ToTable("PresenceChangeEventModel");
+
+                    b.HasDiscriminator().HasValue("PresenceChangeEventModel");
+                });
+
+            modelBuilder.Entity("Theorem.Models.Events.TypingEventModel", b =>
                 {
                     b.HasBaseType("Theorem.Models.Events.EventModel");
 
@@ -220,7 +230,7 @@ namespace TheoremSlackBot.Migrations
                         .HasForeignKey("UserId");
                 });
 
-            modelBuilder.Entity("Theorem.Models.MessageEventModel", b =>
+            modelBuilder.Entity("Theorem.Models.Events.MessageEventModel", b =>
                 {
                     b.HasOne("Theorem.Models.ChannelModel")
                         .WithMany("Messages")

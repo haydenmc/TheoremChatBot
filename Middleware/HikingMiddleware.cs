@@ -12,6 +12,10 @@ using Theorem.Providers;
 
 namespace Theorem.Middleware
 {
+    /// <summary>
+    /// The Hiking middleware allows Theorem to fetch a hike from WTA,
+    /// as well as schedule weekly hikes.
+    /// </summary>
     public class HikingMiddleware : IMiddleware
     {
         private IConfigurationRoot _configuration { get; set; }
@@ -39,8 +43,16 @@ namespace Theorem.Middleware
         private double _minLengthMi = 4;
         private double _maxLengthMi = 10;
         private double _maxElevationGainFt = 2500;
+        private bool _scheduleHikes = true;
+        private DayOfWeek _alertDayOfWeek;
+        private DateTimeOffset _alertTime;
+        private DayOfWeek _finalizeDayOfWeek;
+        private DateTimeOffset _finalizeTime;
+        private DayOfWeek _hikeDayOfWeek;
+        private DateTimeOffset _hikeTime;
+        private string _meetingLocation;
         
-        private string _hikingChannelId { get; set; }
+        private string _hikingChannelSlackId { get; set; }
 
         /// <summary>
         /// Class to serialize WTA data into
@@ -105,18 +117,24 @@ namespace Theorem.Middleware
             {
                 double.TryParse(_configuration["Middleware:Hiking:MaxElevationGainFt"], out _maxElevationGainFt);
             }
+            _scheduleHikes = false;
+            bool.TryParse(_configuration["Middleware:Hiking:Schedule:ScheduleHikes"], out _scheduleHikes);
+            if (_scheduleHikes)
+            {
+                // TODO: Schedule hike...
+            }
         }
 
         private void slackConnected(object sender, EventArgs e)
         {
             // Load configuration values for channel
-            var channel = _slackProvider.ChannelsById.Values.SingleOrDefault(c => c.Name.ToUpper() == _hikingChannelName.ToUpper());
+            var channel = _slackProvider.GetChannelByName(_hikingChannelName);
             if (channel == null)
             {
                 Console.WriteLine(String.Format("Error: Could not find hiking channel #{0}.", _hikingChannelName));
                 return;
             }
-            _hikingChannelId = channel.Id;
+            _hikingChannelSlackId = channel.SlackId;
 
             // Compile mention regex
             if (_messageRegex == null)
