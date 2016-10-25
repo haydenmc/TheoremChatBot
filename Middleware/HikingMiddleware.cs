@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
+using Theorem.Models;
 using Theorem.Models.Events;
 using Theorem.Models.Slack;
 using Theorem.Providers;
@@ -16,10 +17,8 @@ namespace Theorem.Middleware
     /// The Hiking middleware allows Theorem to fetch a hike from WTA,
     /// as well as schedule weekly hikes.
     /// </summary>
-    public class HikingMiddleware : IMiddleware
+    public class HikingMiddleware : Middleware
     {
-        private IConfigurationRoot _configuration { get; set; }
-        private SlackProvider _slackProvider { get; set; }
         private const string _baseUrl = "http://www.wta.org";
         private const string _apiPath = "/go-hiking/map/@@trailhead-search/getHikes?jsonp_callback=WtaTrailheadSearch.setHikes";
         private const string _detailsUrl = "http://www.wta.org/go-hiking/hikes/{0}";
@@ -78,10 +77,9 @@ namespace Theorem.Middleware
             public double? ElevationMaxFt { get; set; }
         }
 
-        public HikingMiddleware(SlackProvider slackProvider, IConfigurationRoot configuration)
+        public HikingMiddleware(SlackProvider slackProvider, Func<ApplicationDbContext> dbContext, IConfigurationRoot configuration)
+            : base(slackProvider, dbContext, configuration)
         {
-            _slackProvider = slackProvider;
-            _configuration = configuration;
             _slackProvider.Connected += slackConnected;
 
             // Load configuration values
@@ -143,7 +141,7 @@ namespace Theorem.Middleware
             }
         }
 
-        public MiddlewareResult ProcessMessage(MessageEventModel message)
+        public override MiddlewareResult ProcessMessage(MessageEventModel message)
         {
             var match = _messageRegex.Match(message.Text);
             if (match.Success)

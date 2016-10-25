@@ -2,24 +2,15 @@ using System;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Theorem.Models;
 using Theorem.Models.Events;
 using Theorem.Providers;
 
 namespace Theorem.Middleware
 {
-    public class SeenMiddleware : IMiddleware
+    public class SeenMiddleware : Middleware
     {
-        /// <summary>
-        /// Reference to the Slack provider.
-        /// </summary>
-        private SlackProvider _slackProvider { get; set;}
-
-        /// <summary>
-        /// Returns a new db context to use for interacting with the database.
-        /// </summary>
-        private Func<ApplicationDbContext> _dbContext { get; set; }
-
         /// <summary>
         /// Pattern used to match messages when in a private context.
         /// </summary>
@@ -70,13 +61,13 @@ namespace Theorem.Middleware
         /// </summary>
         private const string _otherEventMessage = @"<@{0}>: I last saw <@{1}> {2} performing a '{3}' Slack event.";
 
-        public SeenMiddleware(SlackProvider slackProvider, Func<ApplicationDbContext> dbContext)
+        public SeenMiddleware(SlackProvider slackProvider, Func<ApplicationDbContext> dbContext, IConfigurationRoot configuration)
+            : base(slackProvider, dbContext, configuration)
         {
-            _slackProvider = slackProvider;
-            _dbContext = dbContext;
+            // This space intentionally left blank
         }
 
-        public MiddlewareResult ProcessMessage(MessageEventModel message)
+        public override MiddlewareResult ProcessMessage(MessageEventModel message)
         {
             // Ignore messages from ourself
             if (message.User.SlackId == _slackProvider.Self.Id)

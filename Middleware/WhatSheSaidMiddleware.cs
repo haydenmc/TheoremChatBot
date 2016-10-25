@@ -1,27 +1,28 @@
 using System;
+using Microsoft.Extensions.Configuration;
 using Theorem.Models;
 using Theorem.Models.Events;
 using Theorem.Providers;
 
 namespace Theorem.Middleware
 {
-    public class WhatSheSaidMiddleware : IMiddleware
+    public class WhatSheSaidMiddleware : Middleware
     {
         private const double _chanceOfSheSaid = 0.01;
         
-        private SlackProvider _slackProvider { get; set; }
-        
-        public WhatSheSaidMiddleware(SlackProvider slackProvider)
+        public WhatSheSaidMiddleware(SlackProvider slackProvider, Func<ApplicationDbContext> dbContext, IConfigurationRoot configuration)
+            : base(slackProvider, dbContext, configuration)
         {
-            _slackProvider = slackProvider;
+            // This space intentionally left blank
         }
-        public MiddlewareResult ProcessMessage(MessageEventModel message)
+
+        public override MiddlewareResult ProcessMessage(MessageEventModel message)
         {
             Random random = new Random();
             if (message.SlackUserId != _slackProvider.Self.Id && random.NextDouble() < _chanceOfSheSaid)
             {
                 var user = _slackProvider.GetUserBySlackId(message.SlackUserId);
-                _slackProvider.SendMessageToChannelId(message.SlackChannelId, $"@{user.Name} That's what she said.").Wait();
+                _slackProvider.SendMessageToChannelId(message.SlackChannelId, $"<@{message.SlackUserId}> That's what she said.").Wait();
             }
             return MiddlewareResult.Continue;
         }

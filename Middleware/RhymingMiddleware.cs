@@ -12,10 +12,8 @@ using Theorem.Models.Events;
 
 namespace Theorem.Middleware
 {
-    public class RhymingMiddleware : IMiddleware
+    public class RhymingMiddleware : Middleware
     {
-        private IConfigurationRoot _configuration { get; set; }
-        private SlackProvider _slackProvider { get; set; }
         private const string _rhymeApiBaseUrl = "http://rhymebrain.com/talk";
         private readonly double _percentRhymingProbability = 0.02;
         private readonly double _percentRhymingWordsRequired = 0.75;
@@ -28,11 +26,10 @@ namespace Theorem.Middleware
             public int Index;
             public string Word;
         }
-        
-        public RhymingMiddleware(SlackProvider slackProvider, IConfigurationRoot configuration)
+
+        public RhymingMiddleware(SlackProvider slackProvider, Func<ApplicationDbContext> dbContext, IConfigurationRoot configuration)
+            : base(slackProvider, dbContext, configuration)
         {
-            _slackProvider = slackProvider;
-            _configuration = configuration;
             if (_configuration["Middleware:Rhyming:PercentRhymingProbability"] != null)
             {
                 double.TryParse(_configuration["Middleware:Rhyming:PercentRhymingProbability"], out _percentRhymingProbability);
@@ -47,7 +44,7 @@ namespace Theorem.Middleware
             }
         }
         
-        public MiddlewareResult ProcessMessage(MessageEventModel message)
+        public override MiddlewareResult ProcessMessage(MessageEventModel message)
         {
             Random random = new Random();
             if (message.SlackUserId != _slackProvider.Self.Id && random.NextDouble() < _percentRhymingProbability)

@@ -13,6 +13,7 @@ namespace Theorem.Models
     {
         private string _connectionString { get; set; }
         
+        public DbSet<SavedDataPair> SavedDataPairs { get; set; }
         public DbSet<UserModel> Users { get; set; }
         public DbSet<ChannelModel> Channels { get; set; }
         public DbSet<ChannelMemberModel> ChannelMembers { get; set; }
@@ -153,6 +154,8 @@ namespace Theorem.Models
                 .HasOne(c => c.Member)
                 .WithMany(c => c.Channels)
                 .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<SavedDataPair>()
+                .HasKey(k => new { k.Area, k.Key });
         } 
     }
 }
