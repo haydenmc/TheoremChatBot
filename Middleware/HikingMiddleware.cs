@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
@@ -34,6 +35,17 @@ namespace Theorem.Middleware
         /// </summary>
         private Regex _messageRegex { get; set; }
 
+        /// <summary>
+        /// The Slack ID of the channel to post hike updates
+        /// </summary>
+        private string _hikingChannelSlackId { get; set; }
+
+        /// <summary>
+        /// A timer to trigger the hike invite
+        /// </summary>
+        private Timer _inviteTimer;
+
+        #region Configuration Values
         private string _hikingChannelName = "hiking";
         private double _originLatitude = 47.636524;
         private double _originLongitude = -122.129606;
@@ -42,16 +54,15 @@ namespace Theorem.Middleware
         private double _minLengthMi = 4;
         private double _maxLengthMi = 10;
         private double _maxElevationGainFt = 2500;
-        private bool _scheduleHikes = true;
-        private DayOfWeek _alertDayOfWeek;
-        private DateTimeOffset _alertTime;
+        private bool _scheduleHikes = false;
+        private DayOfWeek _inviteDayOfWeek;
+        private TimeSpan _inviteTimeOfDay;
         private DayOfWeek _finalizeDayOfWeek;
-        private DateTimeOffset _finalizeTime;
+        private TimeSpan _finalizeTimeOfDay;
         private DayOfWeek _hikeDayOfWeek;
-        private DateTimeOffset _hikeTime;
+        private TimeSpan _hikeTimeOfDay;
         private string _meetingLocation;
-        
-        private string _hikingChannelSlackId { get; set; }
+        #endregion
 
         /// <summary>
         /// Class to serialize WTA data into
@@ -83,10 +94,7 @@ namespace Theorem.Middleware
             _slackProvider.Connected += slackConnected;
 
             // Load configuration values
-            if (_configuration["Middleware:Hiking:ChannelName"] != null)
-            {
-                _hikingChannelName = _configuration["Middleware:Hiking:ChannelName"];
-            }
+            _hikingChannelName = _configuration["Middleware:Hiking:ChannelName"];
             if (_configuration["Middleware:Hiking:OriginLatitude"] != null)
             {
                 double.TryParse(_configuration["Middleware:Hiking:OriginLatitude"], out _originLatitude);
@@ -115,12 +123,83 @@ namespace Theorem.Middleware
             {
                 double.TryParse(_configuration["Middleware:Hiking:MaxElevationGainFt"], out _maxElevationGainFt);
             }
-            _scheduleHikes = false;
             bool.TryParse(_configuration["Middleware:Hiking:Schedule:ScheduleHikes"], out _scheduleHikes);
+            Enum.TryParse(_configuration["Middleware:Hiking:Schedule:InviteDayOfWeek"], out _inviteDayOfWeek);
+            TimeSpan.TryParse(_configuration["Middleware:Hiking:Schedule:InviteTime"], out _inviteTimeOfDay);
+            Enum.TryParse(_configuration["Middleware:Hiking:Schedule:HikeDayOfWeek"], out _hikeDayOfWeek);
+            TimeSpan.TryParse(_configuration["Middleware:Hiking:Schedule:HikeTime"], out _hikeTimeOfDay);
+            _meetingLocation = _configuration["Middleware:Hiking:Schedule:MeetingLocation"];
+            if (_hikingChannelName != null)
+            {
+                _hikingChannelSlackId = slackProvider.GetChannelByName(_hikingChannelName)?.SlackId;
+            }
             if (_scheduleHikes)
             {
-                // TODO: Schedule hike...
+                if (_inviteTimeOfDay != null
+                    && _hikeTimeOfDay != null
+                    && _meetingLocation != null
+                    && _hikingChannelSlackId != null)
+                {
+                    ScheduleInviteTimer();
+                }
+                else
+                {
+                    Console.WriteLine("Could not schedule hikes due to invalid configuration values.");
+                }
             }
+        }
+
+        private void ScheduleInviteTimer()
+        {
+            var nextInviteTime = NextDateTime(_inviteDayOfWeek, _inviteTimeOfDay);
+            var nextInviteTimeMs = (int)nextInviteTime.Subtract(DateTimeOffset.Now).TotalMilliseconds;
+            _inviteTimer = new Timer(OnInviteTimer, null, nextInviteTimeMs, Timeout.Infinite);
+        }
+
+        private void OnInviteTimer(object state)
+        {
+            _inviteTimer.Dispose();
+            var nextHikeTime = NextDateTime(_hikeDayOfWeek, _hikeTimeOfDay);
+            var nextHikeTimeString = nextHikeTime.ToString("dddd, M/dd @ h:mm tt");
+            var message = $"<!channel> let's plan a hike! Meet "
+                + $"at *{_meetingLocation}* on *{nextHikeTimeString}*. Hike details are below.";
+            postNewHike(_hikingChannelSlackId, message);
+            ScheduleInviteTimer();
+        }
+
+        /// <summary>
+        /// Given a day of week and time of day, returns the DateTimeOffset
+        /// of the next time this occurs.
+        /// </summary>
+        private DateTimeOffset NextDateTime(DayOfWeek dayOfWeek, TimeSpan timeOfDay)
+        {
+            var localOffset = TimeZoneInfo.Local.GetUtcOffset(DateTime.UtcNow);
+            var now = DateTimeOffset.Now;
+            var today = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, 0, localOffset);
+            var currentDow = (int)now.DayOfWeek;
+            int dayCount;
+            if (currentDow < (int)dayOfWeek)
+            {
+                dayCount = (int)dayOfWeek - currentDow;
+            }
+            else if (currentDow == (int)dayOfWeek)
+            {
+                var todayTime = now.Subtract(today);
+                if (todayTime < timeOfDay)
+                {
+                    dayCount = 0;
+                }
+                else
+                {
+                    dayCount = 7;
+                }
+            }
+            else
+            {
+                dayCount = 7 - (currentDow - (int)dayOfWeek);
+            }
+            var nextTime = today.AddDays(dayCount).Add(timeOfDay);
+            return nextTime;
         }
 
         private void slackConnected(object sender, EventArgs e)
