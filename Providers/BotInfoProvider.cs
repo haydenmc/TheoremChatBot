@@ -4,7 +4,8 @@ using Microsoft.Extensions.Configuration;
 namespace Theorem.Providers
 {
     /// <summary>
-    /// SlackProvider provides all Slack functionality (send/receive/etc)
+    /// BotInfoProvider provides meta-information about the Theorem environment the middleware
+    /// runs in to the middleware itself
     /// </summary>
     public class BotInfoProvider
     {        
