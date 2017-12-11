@@ -57,8 +57,6 @@ namespace Theorem.Middleware
         private bool _scheduleHikes = false;
         private DayOfWeek _inviteDayOfWeek;
         private TimeSpan _inviteTimeOfDay;
-        private DayOfWeek _finalizeDayOfWeek;
-        private TimeSpan _finalizeTimeOfDay;
         private DayOfWeek _hikeDayOfWeek;
         private TimeSpan _hikeTimeOfDay;
         private string _meetingLocation;
@@ -129,16 +127,11 @@ namespace Theorem.Middleware
             Enum.TryParse(_configuration["Middleware:Hiking:Schedule:HikeDayOfWeek"], out _hikeDayOfWeek);
             TimeSpan.TryParse(_configuration["Middleware:Hiking:Schedule:HikeTime"], out _hikeTimeOfDay);
             _meetingLocation = _configuration["Middleware:Hiking:Schedule:MeetingLocation"];
-            if (_hikingChannelName != null)
-            {
-                _hikingChannelSlackId = slackProvider.GetChannelByName(_hikingChannelName)?.SlackId;
-            }
             if (_scheduleHikes)
             {
                 if (_inviteTimeOfDay != null
                     && _hikeTimeOfDay != null
-                    && _meetingLocation != null
-                    && _hikingChannelSlackId != null)
+                    && _meetingLocation != null)
                 {
                     ScheduleInviteTimer();
                 }
@@ -163,7 +156,18 @@ namespace Theorem.Middleware
             var nextHikeTimeString = nextHikeTime.ToString("dddd, M/dd @ h:mm tt");
             var message = $"<!channel> let's plan a hike! Meet "
                 + $"at *{_meetingLocation}* on *{nextHikeTimeString}*. Hike details are below.";
-            postNewHike(_hikingChannelSlackId, message);
+            if (_hikingChannelSlackId == null)
+            {
+                _hikingChannelSlackId = _slackProvider.GetChannelByName(_hikingChannelName)?.SlackId;
+            }
+            if (_hikingChannelSlackId == null)
+            {
+                Console.WriteLine(String.Format("Error: Could not find hiking channel #{0}.", _hikingChannelName));
+            }
+            else
+            {
+                postNewHike(_hikingChannelSlackId, message);
+            }
             ScheduleInviteTimer();
         }
 

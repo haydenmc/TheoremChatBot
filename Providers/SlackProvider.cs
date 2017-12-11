@@ -239,7 +239,7 @@ namespace Theorem.Providers
         /// Queries the database for a channel with the specified name 
         /// </summary>
         /// <param name="channelName">Name of requested channel</param>
-        /// <returns>Databsae model of the Slack channel</returns>
+        /// <returns>Database model of the Slack channel</returns>
         public ChannelModel GetChannelByName(string channelName)
         {
             using (var db = _dbContext())
