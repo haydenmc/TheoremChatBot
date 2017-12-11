@@ -291,6 +291,27 @@ namespace Theorem.Providers
         }
 
         /// <summary>
+        /// React to the given message
+        /// </summary>
+        /// <param name="reaction">Reaction identifier</param>
+        /// <param name="message">The message to react to</param>
+        public async Task ReactToMessage(string reaction, MessageEventModel message)
+        {
+            using (var httpClient = new HttpClient())
+            {
+                httpClient.BaseAddress = new Uri(BaseApiUrl);
+                var postData = new FormUrlEncodedContent(new [] { 
+                    new KeyValuePair<string, string>("token", _apiToken), 
+                    new KeyValuePair<string, string>("channel", message.Channel.SlackId),
+                    new KeyValuePair<string, string>("timestamp", message.SlackTimeSent.ToString()), 
+                    new KeyValuePair<string, string>("name", reaction)
+                }); 
+                var result = await httpClient.PostAsync("reactions.add", postData);
+                // TODO: Parse result, handle errors, retry, etc.
+            }
+        }
+
+        /// <summary>
         /// Used to raise the Connected event.
         /// </summary>
         protected virtual void onConnected()

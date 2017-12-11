@@ -12,10 +12,12 @@ namespace Theorem.Models.Events
         public string Text { get; set; }
         
         [JsonProperty("ts")]
-        [JsonConverter(typeof(UnixDateTimeConverter))]
-        public DateTime TimeSent { get; set; }
+        public decimal SlackTimeSent { get; set; }
+        
+        [JsonProperty("thread_ts")]
+        public decimal SlackThreadId { get; set; }
         
         [JsonProperty("team")]
-        public string TeamId { get; set; }
+        public string SlackTeamId { get; set; }
     }
 }

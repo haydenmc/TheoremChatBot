@@ -21,6 +21,13 @@ namespace Theorem.Middleware
 
         private void NewMessage(object sender, MessageEventModel message)
         {
+            if(message.Text == null)
+            {
+                // if there is no text this is a reaction to a message
+                // ignore that for now, if there is new middleware that needs to respond to this
+                // figure out a better way to protect existing middleware from nullpointer exceptions
+                return;
+            }
             foreach (var middleware in _middleware)
             {
                 try 

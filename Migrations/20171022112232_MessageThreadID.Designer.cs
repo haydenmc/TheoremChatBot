@@ -8,9 +8,10 @@ using Theorem.Models;
 namespace TheoremSlackBot.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20171022112232_MessageThreadID")]
+    partial class MessageThreadID
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
             modelBuilder
                 .HasAnnotation("ProductVersion", "1.0.0-rtm-21431")
@@ -191,7 +192,9 @@ namespace TheoremSlackBot.Migrations
 
                     b.Property<string>("Text");
 
-                    b.Property<DateTime>("TimeSent");
+                    b.Property<decimal>("SlackTimeSent");
+
+                    b.Property<decimal>("SlackThreadID");
 
                     b.Property<Guid?>("UserModelId");
 
