@@ -156,6 +156,14 @@ namespace Theorem.Models
                 .OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<SavedDataPair>()
                 .HasKey(k => new { k.Area, k.Key });
+
+            // specify precision of decimal values for message event data
+            modelBuilder.Entity<MessageEventModel>()
+                .Property(m => m.SlackTimeSent)
+                .HasColumnType("decimal(18,6)");
+            modelBuilder.Entity<MessageEventModel>()
+                .Property(m => m.SlackThreadId)
+                .HasColumnType("decimal(18,6)");
         } 
     }
 }
