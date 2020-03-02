@@ -2,12 +2,10 @@ using System;
 using System.ComponentModel.DataAnnotations.Schema;
 using Newtonsoft.Json;
 using Theorem.Converters;
-using Theorem.Models.Events;
-using Theorem.Models.Slack;
 
-namespace Theorem.Models.Events
+namespace Theorem.Models.Slack.Events
 {
-    public class ChannelCreatedEventModel : EventModel
+    public class SlackChannelCreatedEventModel : SlackEventModel
     {
         [NotMapped]
         [JsonProperty("channel")]

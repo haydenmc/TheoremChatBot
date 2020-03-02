@@ -6,7 +6,7 @@ using Theorem.Models.Events;
 
 namespace Theorem.Converters
 {
-    public class SlackEventConverter : JsonCreationConverter<EventModel>
+    public class SlackEventConverter : JsonCreationConverter<SlackEventModel>
     {
         public new bool CanWrite = false;
         
@@ -32,7 +32,7 @@ namespace Theorem.Converters
                     return typeof(ChannelCreatedEventModel);
             }
 
-            return typeof(EventModel);
+            return typeof(SlackEventModel);
         }
     }
 }

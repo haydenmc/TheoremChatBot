@@ -10,6 +10,7 @@ using Newtonsoft.Json;
 using Theorem.Models;
 using Theorem.Models.Events;
 using Theorem.Models.Slack;
+using Theorem.Models.Slack.Events;
 using Theorem.Providers;
 
 namespace Theorem.Middleware
@@ -224,7 +225,7 @@ namespace Theorem.Middleware
             }
         }
 
-        public override MiddlewareResult ProcessMessage(MessageEventModel message)
+        public override MiddlewareResult ProcessMessage(SlackMessageEventModel message)
         {
             var match = _messageRegex.Match(message.Text);
             if (match.Success)

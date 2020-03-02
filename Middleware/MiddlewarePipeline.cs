@@ -9,13 +9,13 @@ namespace Theorem.Middleware
 {
     public class MiddlewarePipeline
     {
-        private SlackProvider _slackProvider { get; set; }
+        private IChatProvider _chatProvider { get; set; }
         private IEnumerable<Middleware> _middleware { get; set; }
         
-        public MiddlewarePipeline(SlackProvider slackProvider, IEnumerable<Middleware> middleware)
+        public MiddlewarePipeline(IChatProvider chatProvider, IEnumerable<Middleware> middleware)
         {
-            _slackProvider = slackProvider;
-            _slackProvider.NewMessage += NewMessage;
+            _chatProvider = chatProvider;
+            _chatProvider.NewMessage += NewMessage;
             _middleware = middleware;
         }
 

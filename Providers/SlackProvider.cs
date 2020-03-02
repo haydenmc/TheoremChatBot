@@ -19,7 +19,8 @@ namespace Theorem.Providers
     /// <summary>
     /// SlackProvider provides all Slack functionality (send/receive/etc)
     /// </summary>
-    public class SlackProvider
+    public class SlackProvider : 
+        IChatProvider
     {
         /// <summary>
         /// Base URL for the Slack API
@@ -137,7 +138,7 @@ namespace Theorem.Providers
             while (webSocketClient.State == WebSocketState.Open)
             {
                 StringBuilder messageString = new StringBuilder();
-                byte[] buffer = new byte[1024];
+                byte[] buffer = new byte[128];
                 WebSocketReceiveResult result;
                 do
                 {
@@ -149,7 +150,7 @@ namespace Theorem.Providers
                     messageString.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
                 } while (!result.EndOfMessage);
                 
-                var slackEvent = JsonConvert.DeserializeObject<EventModel>(messageString.ToString(), _messageDeserializationSettings);
+                var slackEvent = JsonConvert.DeserializeObject<SlackEventModel>(messageString.ToString(), _messageDeserializationSettings);
                 Console.WriteLine(messageString.ToString());
                 await handleSlackEvent(slackEvent);
             }
@@ -159,7 +160,7 @@ namespace Theorem.Providers
         /// Processes events received from Slack.
         /// </summary>
         /// <param name="slackEvent">The parsed Slack event</param>
-        private async Task handleSlackEvent(EventModel slackEvent)
+        private async Task handleSlackEvent(SlackEventModel slackEvent)
         {
             using (var db = _dbContext())
             {
@@ -268,7 +269,10 @@ namespace Theorem.Providers
         /// </summary>
         /// <param name="channelSlackId">Channel Slack ID</param>
         /// <param name="body">Body of the message</param>
-        public async Task SendMessageToChannelId(string channelSlackId, string body, List<SlackAttachmentModel> attachments = null)
+        public async Task SendMessageToChannelId(
+            string channelSlackId,
+            string body,
+            List<SlackAttachmentModel> attachments)
         {
             using (var httpClient = new HttpClient())
             {
@@ -288,6 +292,13 @@ namespace Theorem.Providers
                 var result = await httpClient.PostAsync("chat.postMessage", postData);
                 // TODO: Parse result, handle errors, retry, etc.
             }
+        }
+
+        public async Task SendMessageToChannelId(
+            string channelSlackId,
+            string body)
+        {
+            await SendMessageToChannelId(channelSlackId, body, null);
         }
 
         /// <summary>

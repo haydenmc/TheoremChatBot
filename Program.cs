@@ -54,7 +54,11 @@ namespace Theorem
             var containerBuilder = new ContainerBuilder();
             containerBuilder.RegisterInstance(Configuration).As<IConfigurationRoot>();
             containerBuilder.RegisterType<ApplicationDbContext>().InstancePerDependency();
-            containerBuilder.RegisterType<SlackProvider>().SingleInstance();
+            //containerBuilder.RegisterType<SlackProvider>().SingleInstance();
+            containerBuilder
+                .RegisterType<MattermostProvider>()
+                .SingleInstance()
+                .As<IChatProvider>();
 
             // Middleware
             // Find all the middleware in the current assembly
@@ -81,8 +85,8 @@ namespace Theorem
                 if(!middlewareName.Item2) continue;
                 if(!middlewareTypes.Any(t => t.Item1.Equals(middlewareName.Item1))) continue;
 
-                containerBuilder.RegisterType(middlewareTypes.First(t => t.Item1.Equals(middlewareName.Item1)).Item2)
-                    .As<Middleware.Middleware>();
+                // containerBuilder.RegisterType(middlewareTypes.First(t => t.Item1.Equals(middlewareName.Item1)).Item2)
+                //     .As<Middleware.Middleware>();
             }
 
             // Register BotInfoProvider instance
@@ -101,8 +105,13 @@ namespace Theorem
                 {
                     db.Database.Migrate();
                 }
-                // Connect to Slack!
-                await scope.Resolve<SlackProvider>().Connect();
+                
+                // Connect to chat providers!
+                var chatProviders = scope.Resolve<IEnumerable<IChatProvider>>();
+                foreach (var chatProvider in chatProviders)
+                {
+                    await chatProvider.Connect();
+                }
             }
         }
 

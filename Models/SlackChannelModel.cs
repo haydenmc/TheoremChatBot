@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
-using Theorem.Models.Events;
+using Theorem.Models.Slack.Events;
 
 namespace Theorem.Models
 {
-    public class ChannelModel
+    public class SlackChannelModel
     {
         public Guid Id { get; set; }
         public string SlackId { get; set; }
@@ -25,6 +25,6 @@ namespace Theorem.Models
         public bool IsMember { get; set; }
         public DateTimeOffset TimeLastRead { get; set; }
         [InverseProperty("Channel")]
-        public virtual ICollection<MessageEventModel> Messages { get; set; }
+        public virtual ICollection<SlackMessageEventModel> Messages { get; set; }
     }
 }

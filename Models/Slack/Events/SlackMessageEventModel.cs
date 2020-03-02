@@ -1,12 +1,10 @@
-using System;
-using System.ComponentModel.DataAnnotations.Schema;
 using Newtonsoft.Json;
-using Theorem.Converters;
-using Theorem.Models.Events;
 
-namespace Theorem.Models.Events
+namespace Theorem.Models.Slack.Events
 {
-    public class MessageEventModel : EventModel
+    public class SlackMessageEventModel : 
+        SlackEventModel,
+        IChatMessageModel
     {
         [JsonProperty("text")]
         public string Text { get; set; }
@@ -19,5 +17,15 @@ namespace Theorem.Models.Events
         
         [JsonProperty("team")]
         public string SlackTeamId { get; set; }
+
+        /* IChatMessageModel */
+        [JsonIgnore]
+        public string AuthorId => User.SlackId;
+
+        [JsonIgnore]
+        public string Body => Text;
+
+        [JsonIgnore]
+        string IChatMessageModel.ChannelId => Channel.SlackId;
     }
 }

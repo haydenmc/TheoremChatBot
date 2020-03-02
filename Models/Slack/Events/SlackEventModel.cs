@@ -2,9 +2,9 @@ using System;
 using System.ComponentModel.DataAnnotations.Schema;
 using Newtonsoft.Json;
 
-namespace Theorem.Models.Events
+namespace Theorem.Models.Slack.Events
 {
-    public class EventModel
+    public class SlackEventModel
     {
         [JsonIgnore]
         public Guid Id { get; set; }

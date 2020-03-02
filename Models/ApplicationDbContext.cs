@@ -4,8 +4,8 @@ using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Configuration;
-using Theorem.Models.Events;
 using Theorem.Models.Slack;
+using Theorem.Models.Slack.Events;
 
 namespace Theorem.Models
 {
@@ -17,12 +17,12 @@ namespace Theorem.Models
         public DbSet<UserModel> Users { get; set; }
         public DbSet<ChannelModel> Channels { get; set; }
         public DbSet<ChannelMemberModel> ChannelMembers { get; set; }
-        public DbSet<EventModel> Events { get; set; }
-        public DbSet<MessageEventModel> MessageEvents { get; set; }
-        public DbSet<PresenceChangeEventModel> PresenceChangeEvents { get; set; }
-        public DbSet<TypingEventModel> TypingEvents { get; set; }
-        public DbSet<ChannelJoinedEventModel> ChannelJoinedEvents { get; set; }
-        public DbSet<ChannelCreatedEventModel> ChannelCreatedEvents { get; set; }
+        public DbSet<SlackEventModel> Events { get; set; }
+        public DbSet<SlackMessageEventModel> MessageEvents { get; set; }
+        public DbSet<SlackPresenceChangeEventModel> PresenceChangeEvents { get; set; }
+        public DbSet<SlackTypingEventModel> TypingEvents { get; set; }
+        public DbSet<SlackChannelJoinedEventModel> ChannelJoinedEvents { get; set; }
+        public DbSet<SlackChannelCreatedEventModel> ChannelCreatedEvents { get; set; }
         
         public ApplicationDbContext() : base() 
         {
@@ -158,10 +158,10 @@ namespace Theorem.Models
                 .HasKey(k => new { k.Area, k.Key });
 
             // specify precision of decimal values for message event data
-            modelBuilder.Entity<MessageEventModel>()
+            modelBuilder.Entity<SlackMessageEventModel>()
                 .Property(m => m.SlackTimeSent)
                 .HasColumnType("decimal(18,6)");
-            modelBuilder.Entity<MessageEventModel>()
+            modelBuilder.Entity<SlackMessageEventModel>()
                 .Property(m => m.SlackThreadId)
                 .HasColumnType("decimal(18,6)");
         } 
