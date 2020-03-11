@@ -3,8 +3,7 @@ using Newtonsoft.Json;
 namespace Theorem.Models.Slack.Events
 {
     public class SlackMessageEventModel : 
-        SlackEventModel,
-        IChatMessageModel
+        SlackEventModel
     {
         [JsonProperty("text")]
         public string Text { get; set; }
@@ -26,6 +25,12 @@ namespace Theorem.Models.Slack.Events
         public string Body => Text;
 
         [JsonIgnore]
-        string IChatMessageModel.ChannelId => Channel.SlackId;
+        public ChatMessageModel ToChatMessageModel()
+        {
+            return new ChatMessageModel()
+            {
+                Provider = ProviderKind.Slack,
+            };
+        }
     }
 }

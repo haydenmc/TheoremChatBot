@@ -13,6 +13,7 @@ using Theorem.Converters;
 using Theorem.Models;
 using Theorem.Models.Events;
 using Theorem.Models.Slack;
+using Theorem.Models.Slack.Events;
 
 namespace Theorem.Providers
 {
@@ -44,11 +45,6 @@ namespace Theorem.Providers
         }
         
         /// <summary>
-        /// Returns a new db context to use for interacting with the database
-        /// </summary>
-        private Func<ApplicationDbContext> _dbContext { get; set; }
-        
-        /// <summary>
         /// Keeps track of the web socket URL to connect Slack via
         /// </summary>
         private string _webSocketUrl { get; set; }
@@ -73,16 +69,15 @@ namespace Theorem.Providers
         /// <summary>
         /// Event that fires on receipt of a new message
         /// </summary>
-        public event EventHandler<MessageEventModel> NewMessage;
+        public event EventHandler<ChatMessageModel> NewMessage;
         
         /// <summary>
         /// Constructs a new instance of SlackProvider, requires configuration for things like API token
         /// </summary>
         /// <param name="configuration">Configuration object</param>
-        public SlackProvider(IConfigurationRoot configuration, Func<ApplicationDbContext> dbContext)
+        public SlackProvider(IConfigurationRoot configuration)
         {
             _configuration = configuration;
-            _dbContext = dbContext;
             _messageDeserializationSettings = new JsonSerializerSettings();
             _messageDeserializationSettings.Converters.Add(new SlackEventConverter());
         }
@@ -107,19 +102,6 @@ namespace Theorem.Providers
                 _webSocketUrl = startResponse.Url;
                 ImsById = startResponse.Ims.ToDictionary(i => i.Id);
                 Self = startResponse.Self;
-                
-                // Commit user and channel information to database
-                using (var db = _dbContext())
-                {
-                    foreach (var user in startResponse.Users)
-                    {
-                        db.AddOrUpdateDbUser(user);
-                    }
-                    foreach (var channel in startResponse.Channels)
-                    {
-                        db.AddOrUpdateDbChannel(channel);
-                    }
-                }
                 
                 // Connect to websocket endpoint
                 var webSocketClient = new ClientWebSocket();
@@ -162,105 +144,13 @@ namespace Theorem.Providers
         /// <param name="slackEvent">The parsed Slack event</param>
         private async Task handleSlackEvent(SlackEventModel slackEvent)
         {
-            using (var db = _dbContext())
+            if (slackEvent is SlackMessageEventModel)
             {
-                // Populate generic fields from database
-                slackEvent.Id = Guid.NewGuid();
-                slackEvent.Channel = db.Channels.SingleOrDefault(c => c.SlackId == slackEvent.SlackChannelId);
-                slackEvent.User = db.Users.SingleOrDefault(u => u.SlackId == slackEvent.SlackUserId);
-                slackEvent.TimeReceived = DateTimeOffset.Now;
-
-                if (slackEvent is ChannelCreatedEventModel)
-                {
-                    var dbChannelCreated = (ChannelCreatedEventModel)slackEvent;
-                    db.ChannelCreatedEvents.Add(dbChannelCreated);
-                    await db.SaveChangesAsync();
-                }
-                else if (slackEvent is ChannelJoinedEventModel)
-                {
-                    var dbChannelJoined = (ChannelJoinedEventModel)slackEvent;
-                    // Add or update this channel
-                    dbChannelJoined.ChannelId = db.AddOrUpdateDbChannel(dbChannelJoined.SlackChannel).Id;
-                    db.ChannelJoinedEvents.Add(dbChannelJoined);
-                    await db.SaveChangesAsync();
-                }
-                else if (slackEvent is MessageEventModel)
-                {
-                    var dbMessage = (MessageEventModel)slackEvent;
-                    db.MessageEvents.Add(dbMessage);
-                    await db.SaveChangesAsync();
-                    onNewMessage((MessageEventModel)slackEvent);
-                }
-                else if (slackEvent is PresenceChangeEventModel)
-                {
-                    db.PresenceChangeEvents.Add(slackEvent as PresenceChangeEventModel);
-                    await db.SaveChangesAsync();
-                }
-                else if (slackEvent is TypingEventModel)
-                {
-                    db.TypingEvents.Add(slackEvent as TypingEventModel);
-                    await db.SaveChangesAsync();
-                }
-                else
-                {
-                    // Generic events
-                    db.Events.Add(slackEvent);
-                    await db.SaveChangesAsync();
-                }
-            }
-        }
-
-        /// <summary>
-        /// Queries the database for a user with the specified Slack ID
-        /// </summary>
-        /// <param name="slackUserId">Slack ID of the requested user</param>
-        /// <returns>Databse model of Slack user</returns>
-        public UserModel GetUserBySlackId(string slackUserId)
-        {
-            using (var db = _dbContext())
-            {
-                return db.Users.AsNoTracking().SingleOrDefault(u => u.SlackId == slackUserId);
-            }
-        }
-
-        /// <summary>
-        /// Queries the database for a channel with the specified Slack ID
-        /// </summary>
-        /// <param name="slackId">Slack ID of the requested channel</param>
-        /// <returns>Database model of Slack channel</returns>
-        public ChannelModel GetChannelBySlackId(string slackId)
-        {
-            using (var db = _dbContext())
-            {
-                return db.Channels.AsNoTracking().SingleOrDefault(c => c.SlackId == slackId);
-            }
-        }
-
-        /// <summary>
-        /// Queries the database for a channel with the specified name 
-        /// </summary>
-        /// <param name="channelName">Name of requested channel</param>
-        /// <returns>Database model of the Slack channel</returns>
-        public ChannelModel GetChannelByName(string channelName)
-        {
-            using (var db = _dbContext())
-            {
-                return db.Channels.AsNoTracking().SingleOrDefault(c => c.Name.ToUpper() == channelName.ToUpper());
-            }
-        }
-        
-        /// <summary>
-        /// Send a message to the channel with the given name
-        /// </summary>
-        /// <param name="channelName">Channel name</param>
-        /// <param name="body">Body of the message</param>
-        /// <returns></returns>
-        public async Task SendMessageToChannelName(string channelName, string body)
-        {
-            var targetChannel = GetChannelByName(channelName);
-            if (targetChannel != null)
-            {
-                await SendMessageToChannelId(targetChannel.SlackId, body);
+                var slackMessage = (SlackMessageEventModel)slackEvent;
+                
+                db.MessageEvents.Add(dbMessage);
+                await db.SaveChangesAsync();
+                onNewMessage((MessageEventModel)slackEvent);
             }
         }
         

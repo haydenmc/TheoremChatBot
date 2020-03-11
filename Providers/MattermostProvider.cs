@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Theorem.Converters;
-using Theorem.Models.Events;
+using Theorem.Models;
 using Theorem.Models.Mattermost;
 using Theorem.Models.Mattermost.EventData;
 
@@ -62,7 +62,7 @@ namespace Theorem.Providers
         /// <summary>
         /// Event that fires on receipt of a new message
         /// </summary>
-        public event EventHandler<MessageEventModel> NewMessage;
+        public event EventHandler<ChatMessageModel> NewMessage;
 
         /// <summary>
         /// Constructs a new instance of MattermostProvider, requires
@@ -195,7 +195,7 @@ namespace Theorem.Providers
         /// Used to raise the NewMessage event.
         /// </summary>
         /// <param name="message">Event arguments; the message that was received</param>
-        protected virtual void onNewMessage(MessageEventModel message)
+        protected virtual void onNewMessage(ChatMessageModel message)
         {
             var eventHandler = NewMessage;
             if (eventHandler != null)

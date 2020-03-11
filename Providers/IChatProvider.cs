@@ -1,6 +1,6 @@
 using System;
 using System.Threading.Tasks;
-using Theorem.Models.Events;
+using Theorem.Models;
 
 namespace Theorem.Providers
 {
@@ -8,7 +8,7 @@ namespace Theorem.Providers
     {
         event EventHandler<EventArgs> Connected;
 
-        event EventHandler<MessageEventModel> NewMessage;
+        event EventHandler<ChatMessageModel> NewMessage;
         
         Task Connect();
 
