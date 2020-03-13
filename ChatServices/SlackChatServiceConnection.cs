@@ -6,22 +6,21 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Theorem.Converters;
 using Theorem.Models;
-using Theorem.Models.Events;
 using Theorem.Models.Slack;
 using Theorem.Models.Slack.Events;
+using Theorem.Utility;
 
-namespace Theorem.Providers
+namespace Theorem.ChatServices
 {
     /// <summary>
     /// SlackProvider provides all Slack functionality (send/receive/etc)
     /// </summary>
-    public class SlackProvider : 
-        IChatProvider
+    public class SlackChatServiceConnection : 
+        IChatServiceConnection
     {
         /// <summary>
         /// Base URL for the Slack API
@@ -48,11 +47,6 @@ namespace Theorem.Providers
         /// Keeps track of the web socket URL to connect Slack via
         /// </summary>
         private string _webSocketUrl { get; set; }
-
-        /// <summary>
-        /// Dictionary of instant messages, keyed by id
-        /// </summary>
-        public Dictionary<string, SlackImModel> ImsById { get; private set; }
         
         /// <summary>
         /// Information about the authenticated Slack user
@@ -75,7 +69,7 @@ namespace Theorem.Providers
         /// Constructs a new instance of SlackProvider, requires configuration for things like API token
         /// </summary>
         /// <param name="configuration">Configuration object</param>
-        public SlackProvider(IConfigurationRoot configuration)
+        public SlackChatServiceConnection(IConfigurationRoot configuration)
         {
             _configuration = configuration;
             _messageDeserializationSettings = new JsonSerializerSettings();
@@ -100,7 +94,6 @@ namespace Theorem.Providers
                 
                 // Save relevant return information
                 _webSocketUrl = startResponse.Url;
-                ImsById = startResponse.Ims.ToDictionary(i => i.Id);
                 Self = startResponse.Self;
                 
                 // Connect to websocket endpoint
@@ -134,7 +127,9 @@ namespace Theorem.Providers
                 
                 var slackEvent = JsonConvert.DeserializeObject<SlackEventModel>(messageString.ToString(), _messageDeserializationSettings);
                 Console.WriteLine(messageString.ToString());
-                await handleSlackEvent(slackEvent);
+                Task.Run(() => {
+                    handleSlackEvent(slackEvent);
+                }).FireAndForget();
             }
         }
 
@@ -142,15 +137,12 @@ namespace Theorem.Providers
         /// Processes events received from Slack.
         /// </summary>
         /// <param name="slackEvent">The parsed Slack event</param>
-        private async Task handleSlackEvent(SlackEventModel slackEvent)
+        private void handleSlackEvent(SlackEventModel slackEvent)
         {
             if (slackEvent is SlackMessageEventModel)
             {
-                var slackMessage = (SlackMessageEventModel)slackEvent;
-                
-                db.MessageEvents.Add(dbMessage);
-                await db.SaveChangesAsync();
-                onNewMessage((MessageEventModel)slackEvent);
+                var slackMessage = slackEvent as SlackMessageEventModel;
+                onNewMessage(slackMessage.ToChatMessageModel());
             }
         }
         
@@ -160,54 +152,19 @@ namespace Theorem.Providers
         /// <param name="channelSlackId">Channel Slack ID</param>
         /// <param name="body">Body of the message</param>
         public async Task SendMessageToChannelId(
-            string channelSlackId,
-            string body,
-            List<SlackAttachmentModel> attachments)
-        {
-            using (var httpClient = new HttpClient())
-            {
-                httpClient.BaseAddress = new Uri(BaseApiUrl);
-                var attachmentsStr = "";
-                if (attachments != null)
-                {
-                    attachmentsStr = JsonConvert.SerializeObject(attachments);
-                }
-                var postData = new FormUrlEncodedContent(new[] { 
-                    new KeyValuePair<string, string>("token", _apiToken), 
-                    new KeyValuePair<string, string>("channel", channelSlackId), 
-                    new KeyValuePair<string, string>("text", body),
-                    new KeyValuePair<string, string>("as_user", "true"),
-                    new KeyValuePair<string, string>("attachments", attachmentsStr)
-                }); 
-                var result = await httpClient.PostAsync("chat.postMessage", postData);
-                // TODO: Parse result, handle errors, retry, etc.
-            }
-        }
-
-        public async Task SendMessageToChannelId(
-            string channelSlackId,
+            string channelId,
             string body)
         {
-            await SendMessageToChannelId(channelSlackId, body, null);
-        }
-
-        /// <summary>
-        /// React to the given message
-        /// </summary>
-        /// <param name="reaction">Reaction identifier</param>
-        /// <param name="message">The message to react to</param>
-        public async Task ReactToMessage(string reaction, MessageEventModel message)
-        {
             using (var httpClient = new HttpClient())
             {
                 httpClient.BaseAddress = new Uri(BaseApiUrl);
-                var postData = new FormUrlEncodedContent(new [] { 
+                var postData = new FormUrlEncodedContent(new[] { 
                     new KeyValuePair<string, string>("token", _apiToken), 
-                    new KeyValuePair<string, string>("channel", message.Channel.SlackId),
-                    new KeyValuePair<string, string>("timestamp", message.SlackTimeSent.ToString()), 
-                    new KeyValuePair<string, string>("name", reaction)
+                    new KeyValuePair<string, string>("channel", channelId), 
+                    new KeyValuePair<string, string>("text", body),
+                    new KeyValuePair<string, string>("as_user", "true")
                 }); 
-                var result = await httpClient.PostAsync("reactions.add", postData);
+                var result = await httpClient.PostAsync("chat.postMessage", postData);
                 // TODO: Parse result, handle errors, retry, etc.
             }
         }
@@ -228,7 +185,7 @@ namespace Theorem.Providers
         /// Used to raise the NewMessage event.
         /// </summary>
         /// <param name="message">Event arguments; the message that was received</param>
-        protected virtual void onNewMessage(MessageEventModel message)
+        protected virtual void onNewMessage(ChatMessageModel message)
         {
             var eventHandler = NewMessage;
             if (eventHandler != null)

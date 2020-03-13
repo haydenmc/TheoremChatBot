@@ -2,9 +2,9 @@ using System;
 using System.Threading.Tasks;
 using Theorem.Models;
 
-namespace Theorem.Providers
+namespace Theorem.ChatServices
 {
-    public interface IChatProvider
+    public interface IChatServiceConnection
     {
         event EventHandler<EventArgs> Connected;
 

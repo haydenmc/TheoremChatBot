@@ -11,13 +11,13 @@ using Theorem.Models;
 using Theorem.Models.Mattermost;
 using Theorem.Models.Mattermost.EventData;
 
-namespace Theorem.Providers
+namespace Theorem.ChatServices
 {
     /// <summary>
     /// MattermostProvider enables connection to Mattermost server.
     /// </summary>
-    public class MattermostProvider : 
-        IChatProvider
+    public class MattermostChatServiceConnection : 
+        IChatServiceConnection
     {
         /// <summary>
         /// Configuration object for retrieving configuration values
@@ -69,7 +69,7 @@ namespace Theorem.Providers
         /// configuration for things like API token
         /// </summary>
         /// <param name="configuration">Configuration object</param>
-        public MattermostProvider(IConfigurationRoot configuration)
+        public MattermostChatServiceConnection(IConfigurationRoot configuration)
         {
             _configuration = configuration;
             _messageDeserializationSettings = new JsonSerializerSettings();
@@ -100,15 +100,14 @@ namespace Theorem.Providers
                     }
                 };
             var authChallengePayload = JsonConvert.SerializeObject(authChallenge);
-            await webSocketClient.SendAsync(
-                        Encoding.UTF8.GetBytes(authChallengePayload),
-                        WebSocketMessageType.Text,
-                        true,
-                        CancellationToken.None);
             await Task.WhenAll(new Task[]
                 {
                     receive(webSocketClient),
-                    
+                    webSocketClient.SendAsync(
+                        Encoding.UTF8.GetBytes(authChallengePayload),
+                        WebSocketMessageType.Text,
+                        true,
+                        CancellationToken.None)
                 });
         }
 

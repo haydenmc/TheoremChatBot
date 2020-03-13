@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Autofac;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Theorem.ChatServices;
 using Theorem.Middleware;
 using Theorem.Models;
 using Theorem.Providers;
@@ -53,18 +54,18 @@ namespace Theorem
             // Register dependencies
             var containerBuilder = new ContainerBuilder();
             containerBuilder.RegisterInstance(Configuration).As<IConfigurationRoot>();
-            containerBuilder.RegisterType<ApplicationDbContext>().InstancePerDependency();
+            containerBuilder.RegisterType<TheoremDbContext>().InstancePerDependency();
             //containerBuilder.RegisterType<SlackProvider>().SingleInstance();
             containerBuilder
-                .RegisterType<MattermostProvider>()
+                .RegisterType<MattermostChatServiceConnection>()
                 .SingleInstance()
-                .As<IChatProvider>();
+                .As<IChatServiceConnection>();
 
             // Middleware
             // Find all the middleware in the current assembly
             var middlewareTypes = Assembly.GetEntryAssembly().GetTypes()
-                .Where(t => t.IsAssignableTo<Middleware.Middleware>() 
-                    && !t.Equals(typeof(Middleware.Middleware)))
+                .Where(t => t.IsAssignableTo<IMiddleware>() 
+                    && !t.Equals(typeof(IMiddleware)))
                 .Select(t => new Tuple<string, Type>(
                     t.Name.EndsWith("Middleware") ? t.Name.Substring(0, t.Name.Length - 10) : t.Name, t)); 
 
@@ -101,13 +102,13 @@ namespace Theorem
             using (var scope = _iocContainer.BeginLifetimeScope())
             {
                 // Trigger database migrations
-                using (var db = scope.Resolve<ApplicationDbContext>())
+                using (var db = scope.Resolve<TheoremDbContext>())
                 {
                     db.Database.Migrate();
                 }
                 
                 // Connect to chat providers!
-                var chatProviders = scope.Resolve<IEnumerable<IChatProvider>>();
+                var chatProviders = scope.Resolve<IEnumerable<IChatServiceConnection>>();
                 foreach (var chatProvider in chatProviders)
                 {
                     await chatProvider.Connect();

@@ -14,13 +14,13 @@ namespace Theorem.Models.Slack
         [JsonProperty("self")]
         public SlackSelfModel Self { get; set; }
         
-        [JsonProperty("users")]
-        public List<SlackUserModel> Users { get; set; }
+        // [JsonProperty("users")]
+        // public List<SlackUserModel> Users { get; set; }
         
-        [JsonProperty("channels")]
-        public List<SlackChannelModel> Channels { get; set; }
+        // [JsonProperty("channels")]
+        // public List<SlackChannelModel> Channels { get; set; }
 
-        [JsonProperty("ims")]
-        public List<SlackImModel> Ims { get; set; }
+        // [JsonProperty("ims")]
+        // public List<SlackImModel> Ims { get; set; }
     }
 }

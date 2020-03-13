@@ -1,8 +1,7 @@
 using System;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Theorem.Models;
-using Theorem.Models.Events;
+using Theorem.Models.Slack.Events;
 
 namespace Theorem.Converters
 {
@@ -21,15 +20,7 @@ namespace Theorem.Converters
             switch (type)
             {
                 case "message":
-                    return typeof(MessageEventModel);
-                case "presence_change":
-                    return typeof(PresenceChangeEventModel);
-                case "user_typing":
-                    return typeof(TypingEventModel);
-                case "channel_joined":
-                    return typeof(ChannelJoinedEventModel);
-                case "channel_created":
-                    return typeof(ChannelCreatedEventModel);
+                    return typeof(SlackMessageEventModel);
             }
 
             return typeof(SlackEventModel);
