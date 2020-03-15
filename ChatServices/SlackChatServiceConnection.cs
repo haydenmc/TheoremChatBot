@@ -30,7 +30,7 @@ namespace Theorem.ChatServices
         /// <summary>
         /// Configuration object for retrieving configuration values
         /// </summary>
-        private IConfigurationRoot _configuration { get; set; }
+        private ConfigurationSection _configuration { get; set; }
         
         /// <summary>
         /// Easy access to the API token via configuration object
@@ -53,7 +53,21 @@ namespace Theorem.ChatServices
         /// </summary>
         public SlackSelfModel Self { get; private set; }
         
+        /// <summary>
+        /// Settings used to deserialize incoming events into the proper types.
+        /// </summary>
         private JsonSerializerSettings _messageDeserializationSettings { get; set; }
+
+        /// <summary>
+        /// Name of this connection instance as specified in configuration
+        /// </summary>
+        public string Name
+        {
+            get
+            {
+                return _configuration.Key;
+            }
+        }
         
         /// <summary>
         /// Event that fires when connected
@@ -69,7 +83,7 @@ namespace Theorem.ChatServices
         /// Constructs a new instance of SlackProvider, requires configuration for things like API token
         /// </summary>
         /// <param name="configuration">Configuration object</param>
-        public SlackChatServiceConnection(IConfigurationRoot configuration)
+        public SlackChatServiceConnection(ConfigurationSection configuration)
         {
             _configuration = configuration;
             _messageDeserializationSettings = new JsonSerializerSettings();

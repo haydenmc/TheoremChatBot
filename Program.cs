@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Autofac;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Theorem.ChatServices;
 using Theorem.Middleware;
 using Theorem.Models;
@@ -16,22 +17,47 @@ namespace Theorem
     public class Program
     {
         public IConfigurationRoot Configuration { get; set; }
+
+        private ILogger<Program> Logger { get; set; }
         
         private IContainer _iocContainer { get; set; }
         
-        public static void Main(string[] args)
+        public async static Task Main(string[] args)
         {
-            new Program().Start().Wait();
+            await new Program().Start();
+        }
+
+        public Program()
+        {
+            // Set up logging
+            var loggerFactory = LoggerFactory.Create(builder =>
+            {
+                builder
+                    .SetMinimumLevel(LogLevel.Debug)
+                    .AddConsole();
+            });
+            Logger = loggerFactory.CreateLogger<Program>();
         }
         
         public async Task Start()
         {
+            Logger.LogInformation("Starting Theorem...");
+
             // Load configuration
+            Logger.LogInformation("Loading configuration data...");
             Configuration = new ConfigurationBuilder()
                 .AddJsonFile("appsettings.default.json")
                 .AddJsonFile("appsettings.json", optional: true)
                 .AddEnvironmentVariables()
                 .Build();
+
+            // TODO: Allow configuring logger from configuration
+            var loggerFactory = LoggerFactory.Create(builder =>
+            {
+                builder
+                    .SetMinimumLevel(LogLevel.Debug)
+                    .AddConsole();
+            });
 
             // determine execution order
             // get all middleware listed in configuration
@@ -54,12 +80,26 @@ namespace Theorem
             // Register dependencies
             var containerBuilder = new ContainerBuilder();
             containerBuilder.RegisterInstance(Configuration).As<IConfigurationRoot>();
-            containerBuilder.RegisterType<TheoremDbContext>().InstancePerDependency();
-            //containerBuilder.RegisterType<SlackProvider>().SingleInstance();
+
+            // Logging
             containerBuilder
-                .RegisterType<MattermostChatServiceConnection>()
-                .SingleInstance()
-                .As<IChatServiceConnection>();
+                .RegisterInstance(loggerFactory)
+                .As<ILoggerFactory>()
+                .SingleInstance();
+            containerBuilder
+                .RegisterGeneric(typeof(Logger<>))
+                .As(typeof(ILogger<>))
+                .SingleInstance();
+            
+            // SQLite database
+            var dbFileName = Configuration.GetValue<string>("Database", "Theorem.db");
+            Logger.LogInformation("Registering database context with file {file}...", dbFileName);
+            containerBuilder
+                .Register(c => new TheoremDbContext(dbFileName))
+                .InstancePerDependency();
+
+            // Chat service providers
+            RegisterChatServiceConnections(containerBuilder);
 
             // Middleware
             // Find all the middleware in the current assembly
@@ -113,6 +153,57 @@ namespace Theorem
                 {
                     await chatProvider.Connect();
                 }
+            }
+        }
+
+        private void RegisterChatServiceConnections(ContainerBuilder containerBuilder)
+        {
+            Logger.LogInformation("Registering chat service connections...");
+
+            // Find all the chat service connection types in the current assembly
+            var connectionTypes = Assembly.GetEntryAssembly().GetTypes()
+                .Where(t => t.IsAssignableTo<IChatServiceConnection>() 
+                    && !t.Equals(typeof(IChatServiceConnection)))
+                .ToDictionary(
+                    k => k.Name.EndsWith("ChatServiceConnection") ? 
+                        k.Name.Substring(0, k.Name.Length - 21) :
+                        k.Name);
+            Logger.LogInformation(
+                "Found {count} chat service connection types in assembly: {types}.",
+                connectionTypes.Keys.Count,
+                String.Join(", ", connectionTypes.Keys));
+
+            // Pull configuration data and instantiate connections
+            Logger.LogInformation("Reading chat service configuration...");
+            var chatServicesConfig = Configuration.GetSection("ChatServiceConnections");
+            foreach (var chatServiceConfig in chatServicesConfig.GetChildren())
+            {
+                var chatServiceName = chatServiceConfig.Key;
+                Logger.LogDebug("Reading configuration for chat service {name}...",
+                    chatServiceName);
+                var chatServiceService = chatServiceConfig.GetValue<string>("Service", "");
+                if (chatServiceService.Length <= 0)
+                {
+                    Logger.LogError(
+                        "Service configuration value not found for chat service {name}!" + 
+                        " Skipping...", chatServiceName);
+                    break;
+                }
+                if (!connectionTypes.ContainsKey(chatServiceService))
+                {
+                    Logger.LogError("Could not find chat connection type for service {service}",
+                        chatServiceService);
+                    break;
+                }
+                Type connectionType = connectionTypes[chatServiceService];
+                Logger.LogDebug("Registering chat service connection type {type}...",
+                    connectionType.Name);
+                containerBuilder
+                    .RegisterType(connectionType)
+                    .WithParameter(
+                        new TypedParameter(typeof(ConfigurationSection), chatServiceConfig))
+                    .As<IChatServiceConnection>()
+                    .SingleInstance();
             }
         }
 

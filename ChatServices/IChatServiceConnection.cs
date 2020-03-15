@@ -6,6 +6,8 @@ namespace Theorem.ChatServices
 {
     public interface IChatServiceConnection
     {
+        string Name { get; }
+
         event EventHandler<EventArgs> Connected;
 
         event EventHandler<ChatMessageModel> NewMessage;

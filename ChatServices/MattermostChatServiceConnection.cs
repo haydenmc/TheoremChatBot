@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Theorem.Converters;
 using Theorem.Models;
@@ -22,9 +23,28 @@ namespace Theorem.ChatServices
         /// <summary>
         /// Configuration object for retrieving configuration values
         /// </summary>
-        private IConfigurationRoot _configuration { get; set; }
+        private ConfigurationSection _configuration { get; set; }
 
+        /// <summary>
+        /// Logger instance for logging events
+        /// </summary>
+        private ILogger<MattermostChatServiceConnection> _logger { get; set; }
+
+        /// <summary>
+        /// Settings used to deserialize incoming events into the proper types.
+        /// </summary>
         private JsonSerializerSettings _messageDeserializationSettings { get; set; }
+
+        /// <summary>
+        /// Name of this connection instance as specified in configuration
+        /// </summary>
+        public string Name
+        {
+            get
+            {
+                return _configuration.Key;
+            }
+        }
 
         /// <summary>
         /// URL of the server to connect to defined by configuration values
@@ -33,7 +53,7 @@ namespace Theorem.ChatServices
         {
             get
             {
-                return _configuration["Mattermost:WebsocketServerUrl"];
+                return _configuration["WebsocketServerUrl"];
             }
         }
         
@@ -44,7 +64,7 @@ namespace Theorem.ChatServices
         {
             get
             {
-                return _configuration["Mattermost:AccessToken"];
+                return _configuration["AccessToken"];
             }
         }
 
@@ -69,9 +89,11 @@ namespace Theorem.ChatServices
         /// configuration for things like API token
         /// </summary>
         /// <param name="configuration">Configuration object</param>
-        public MattermostChatServiceConnection(IConfigurationRoot configuration)
+        public MattermostChatServiceConnection(ConfigurationSection configuration,
+            ILogger<MattermostChatServiceConnection> logger)
         {
             _configuration = configuration;
+            _logger = logger;
             _messageDeserializationSettings = new JsonSerializerSettings();
             _messageDeserializationSettings.Converters.Add(
                 new MattermostEventConverter());
@@ -82,6 +104,9 @@ namespace Theorem.ChatServices
         /// </summary>
         public async Task Connect()
         {
+            _logger.LogInformation("Connecting to Mattermost server {server}...",
+                _baseWebsocketUrl);
+
             // Connect to websocket endpoint
             var webSocketClient = new ClientWebSocket();
             await webSocketClient.ConnectAsync(
@@ -143,8 +168,7 @@ namespace Theorem.ChatServices
                 } while (!result.EndOfMessage);
                 
                 string messageString = messageBuilder.ToString();
-
-                Console.WriteLine(messageString);
+                _logger.LogDebug("Received message: {message}", messageString);
 
                 if (!_connectionAuthenticated)
                 {
@@ -153,6 +177,7 @@ namespace Theorem.ChatServices
                             messageString);
                     if (authResponse.Status == "OK")
                     {
+                        _logger.LogInformation("Mattermost connection authenticated successfully.");
                         _connectionAuthenticated = true;
                     }
                 }

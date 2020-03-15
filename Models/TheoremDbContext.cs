@@ -4,10 +4,16 @@ namespace Theorem.Models
 {
     public class TheoremDbContext : DbContext
     {
+        private readonly string DbFileName = "theorem.db";
         public DbSet<ChatMessageModel> ChatMessages { get; set; }
+
+        public TheoremDbContext(string dbFileName) : base()
+        {
+            DbFileName = dbFileName;
+        }
         
         protected override void OnConfiguring(DbContextOptionsBuilder options)
-            => options.UseSqlite("Data Source=theorem.db");
+            => options.UseSqlite($"Data Source={DbFileName}");
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

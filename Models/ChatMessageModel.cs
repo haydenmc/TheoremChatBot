@@ -28,9 +28,9 @@ namespace Theorem.Models
         public virtual IChatServiceConnection FromChatServiceConnection { get; set; }
         
         [NotMapped]
-        public virtual bool IsFromSelf { get; set; }
+        public virtual bool IsFromTheorem { get; set; }
 
         [NotMapped]
-        public virtual bool IsMentioningMe { get; set; }
+        public virtual bool IsMentioningTheorem { get; set; }
     }
 }
