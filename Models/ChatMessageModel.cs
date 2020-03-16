@@ -9,7 +9,7 @@ namespace Theorem.Models
         /* Content from Chat Service */
         public virtual string Id { get; set; }
 
-        public virtual ProviderKind Provider { get; set; }
+        public virtual ChatServiceKind Provider { get; set; }
 
         public virtual string ProviderInstance { get; set; }
 

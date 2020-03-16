@@ -1,6 +1,6 @@
 namespace Theorem.Models
 {
-    public enum ProviderKind
+    public enum ChatServiceKind
     {
         Slack,
         Mattermost

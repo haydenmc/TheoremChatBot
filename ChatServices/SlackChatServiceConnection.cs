@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Theorem.Converters;
 using Theorem.Models;
@@ -31,6 +32,11 @@ namespace Theorem.ChatServices
         /// Configuration object for retrieving configuration values
         /// </summary>
         private ConfigurationSection _configuration { get; set; }
+
+        /// <summary>
+        /// Logger instance for logging events
+        /// </summary>
+        private ILogger<SlackChatServiceConnection> _logger { get; set; }
         
         /// <summary>
         /// Easy access to the API token via configuration object
@@ -39,7 +45,7 @@ namespace Theorem.ChatServices
         {
             get
             {
-                return _configuration["Slack:ApiToken"];
+                return _configuration["ApiToken"];
             }
         }
         
@@ -52,6 +58,17 @@ namespace Theorem.ChatServices
         /// Information about the authenticated Slack user
         /// </summary>
         public SlackSelfModel Self { get; private set; }
+
+        /// <summary>
+        /// User ID assigned to us by Slack
+        /// </summary>
+        public string UserId
+        {
+            get
+            {
+                return Self.Id;
+            }
+        }
         
         /// <summary>
         /// Settings used to deserialize incoming events into the proper types.
@@ -83,9 +100,11 @@ namespace Theorem.ChatServices
         /// Constructs a new instance of SlackProvider, requires configuration for things like API token
         /// </summary>
         /// <param name="configuration">Configuration object</param>
-        public SlackChatServiceConnection(ConfigurationSection configuration)
+        public SlackChatServiceConnection(ConfigurationSection configuration,
+            ILogger<SlackChatServiceConnection> logger)
         {
             _configuration = configuration;
+            _logger = logger;
             _messageDeserializationSettings = new JsonSerializerSettings();
             _messageDeserializationSettings.Converters.Add(new SlackEventConverter());
         }
@@ -93,8 +112,9 @@ namespace Theorem.ChatServices
         /// <summary>
         /// Connects to Slack
         /// </summary>
-        public async Task Connect()
+        public async Task StartAsync()
         {
+            _logger.LogInformation("Connecting to Slack instance {name}...", Name);
             using (var httpClient = new HttpClient())
             {
                 httpClient.BaseAddress = new Uri(BaseApiUrl);
@@ -126,7 +146,7 @@ namespace Theorem.ChatServices
             onConnected();
             while (webSocketClient.State == WebSocketState.Open)
             {
-                StringBuilder messageString = new StringBuilder();
+                StringBuilder messageBuilder = new StringBuilder();
                 byte[] buffer = new byte[128];
                 WebSocketReceiveResult result;
                 do
@@ -136,14 +156,15 @@ namespace Theorem.ChatServices
                     {
                         await webSocketClient.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, CancellationToken.None);
                     }
-                    messageString.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+                    messageBuilder.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
                 } while (!result.EndOfMessage);
+
+                string messageString = messageBuilder.ToString();
+                _logger.LogDebug("Received message: {message}", messageString);
                 
-                var slackEvent = JsonConvert.DeserializeObject<SlackEventModel>(messageString.ToString(), _messageDeserializationSettings);
-                Console.WriteLine(messageString.ToString());
-                Task.Run(() => {
-                    handleSlackEvent(slackEvent);
-                }).FireAndForget();
+                var slackEvent = JsonConvert.DeserializeObject<SlackEventModel>(messageString,
+                    _messageDeserializationSettings);
+                handleSlackEvent(slackEvent);
             }
         }
 
@@ -156,7 +177,7 @@ namespace Theorem.ChatServices
             if (slackEvent is SlackMessageEventModel)
             {
                 var slackMessage = slackEvent as SlackMessageEventModel;
-                onNewMessage(slackMessage.ToChatMessageModel());
+                onNewMessage(slackMessage.ToChatMessageModel(this));
             }
         }
         
@@ -165,7 +186,7 @@ namespace Theorem.ChatServices
         /// </summary>
         /// <param name="channelSlackId">Channel Slack ID</param>
         /// <param name="body">Body of the message</param>
-        public async Task SendMessageToChannelId(
+        public async Task SendMessageToChannelIdAsync(
             string channelId,
             string body)
         {

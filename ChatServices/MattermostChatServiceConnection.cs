@@ -1,5 +1,6 @@
 using System;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
@@ -7,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Theorem.Converters;
 using Theorem.Models;
 using Theorem.Models.Mattermost;
@@ -47,13 +49,25 @@ namespace Theorem.ChatServices
         }
 
         /// <summary>
-        /// URL of the server to connect to defined by configuration values
+        /// User ID assigned to us by Mattermost
         /// </summary>
-        private string _baseWebsocketUrl
+        public string UserId
         {
             get
             {
-                return _configuration["WebsocketServerUrl"];
+                return _userId;
+            }
+        }
+        private string _userId;
+
+        /// <summary>
+        /// URL of the server to connect to defined by configuration values
+        /// </summary>
+        private string _serverHostname
+        {
+            get
+            {
+                return _configuration["ServerHostname"];
             }
         }
         
@@ -102,15 +116,15 @@ namespace Theorem.ChatServices
         /// <summary>
         /// Connects to Mattermost
         /// </summary>
-        public async Task Connect()
+        public async Task StartAsync()
         {
             _logger.LogInformation("Connecting to Mattermost server {server}...",
-                _baseWebsocketUrl);
+                _serverHostname);
 
             // Connect to websocket endpoint
             var webSocketClient = new ClientWebSocket();
             await webSocketClient.ConnectAsync(
-                new Uri(new Uri(_baseWebsocketUrl), "api/v4/websocket"),
+                new Uri(new Uri($"wss://{_serverHostname}"), "api/v4/websocket"),
                 CancellationToken.None);
 
             // Immediately send auth payload, then wait for responses.
@@ -172,24 +186,27 @@ namespace Theorem.ChatServices
 
                 if (!_connectionAuthenticated)
                 {
-                    var authResponse = 
-                        JsonConvert.DeserializeObject<MattermostAuthResponseModel>(
-                            messageString);
-                    if (authResponse.Status == "OK")
+                    // Authentication responses are different than usual messages
+                    var messageParsed = JObject.Parse(messageString);
+                    if (messageParsed.ContainsKey("status"))
                     {
-                        _logger.LogInformation("Mattermost connection authenticated successfully.");
-                        _connectionAuthenticated = true;
+                        var authResponse = 
+                            JsonConvert.DeserializeObject<MattermostAuthResponseModel>(
+                                messageString);
+                        if (authResponse.Status == "OK")
+                        {
+                            _logger.LogInformation("Mattermost connection authenticated successfully.");
+                            _connectionAuthenticated = true;
+                        }
                     }
                 }
-                else
-                {
-                    IMattermostWebsocketMessageModel message = 
-                        JsonConvert.DeserializeObject
-                            <IMattermostWebsocketMessageModel>(
-                                messageString,
-                                _messageDeserializationSettings);
-                    handleMessage(message);
-                }
+
+                IMattermostWebsocketMessageModel message = 
+                    JsonConvert.DeserializeObject
+                        <IMattermostWebsocketMessageModel>(
+                            messageString,
+                            _messageDeserializationSettings);
+                handleMessage(message);
             }
         }
 
@@ -199,7 +216,15 @@ namespace Theorem.ChatServices
             Type messageType = message.GetType().GetGenericArguments()[0];
             if (messageType == typeof(MattermostHelloEventDataModel))
             {
-                Console.WriteLine("Got hello'ed!");
+                _logger.LogDebug("Received 'hello' message. Our user ID is '{userid}'.",
+                    message.Broadcast.UserId);
+                _userId = message.Broadcast.UserId;
+            }
+            else if (messageType == typeof(MattermostPostedEventDataModel))
+            {
+                var postedMessage = message.Data as MattermostPostedEventDataModel;
+                _logger.LogDebug("Got message {id}", postedMessage.Post.Id);
+                onNewMessage(postedMessage.ToChatMessageModel(this));
             }
         }
 
@@ -228,9 +253,40 @@ namespace Theorem.ChatServices
             }
         }
 
-        public Task SendMessageToChannelId(string channelId, string body)
+        /// <summary>
+        /// Returns an http client prepared with the correct base URL and authorization headers.
+        /// </summary>
+        private HttpClient getHttpClient()
         {
-            throw new NotImplementedException();
+            var httpClient = new HttpClient();
+            httpClient.BaseAddress = new Uri($"https://{_serverHostname}");
+            httpClient.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", _accessToken);
+            return httpClient;
+        }
+
+        /// <summary>
+        /// Send a message to the channel with the given ID
+        /// </summary>
+        /// <param name="channelSlackId">Channel ID</param>
+        /// <param name="body">Body of the message</param>
+        public async Task SendMessageToChannelIdAsync(string channelId, string body)
+        {
+            using (var httpClient = getHttpClient())
+            {
+                var messageObject = new {
+                    channel_id = channelId,
+                    message = body
+                };
+                var messageString = JsonConvert.SerializeObject(messageObject);
+                _logger.LogDebug("Sending message to channel: {messagePayload}", messageString);
+                var content = new StringContent(
+                    messageString,
+                    Encoding.UTF8,
+                    "application/json");
+                var result = await httpClient.PostAsync("api/v4/posts", content);
+                // TODO: Parse result, handle errors, retry, etc.
+            }
         }
     }
 }

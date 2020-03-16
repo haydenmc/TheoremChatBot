@@ -8,12 +8,14 @@ namespace Theorem.ChatServices
     {
         string Name { get; }
 
+        string UserId { get; }
+
         event EventHandler<EventArgs> Connected;
 
         event EventHandler<ChatMessageModel> NewMessage;
         
-        Task Connect();
+        Task StartAsync();
 
-        Task SendMessageToChannelId(string channelId, string body);
+        Task SendMessageToChannelIdAsync(string channelId, string body);
     }
 }

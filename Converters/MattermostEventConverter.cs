@@ -38,6 +38,11 @@ namespace Theorem.Converters
                         new MattermostWebsocketMessageModel
                             <MattermostHelloEventDataModel>();
                     break;
+                case "posted":
+                    messageModel = 
+                        new MattermostWebsocketMessageModel
+                            <MattermostPostedEventDataModel>();
+                    break;
                 default:
                     // Log?
                     messageModel = 

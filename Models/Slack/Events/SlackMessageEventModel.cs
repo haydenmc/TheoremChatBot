@@ -1,5 +1,6 @@
 using System;
 using Newtonsoft.Json;
+using Theorem.ChatServices;
 
 namespace Theorem.Models.Slack.Events
 {
@@ -19,18 +20,24 @@ namespace Theorem.Models.Slack.Events
         [JsonProperty("team")]
         public string SlackTeamId { get; set; }
 
-        public ChatMessageModel ToChatMessageModel()
+        public ChatMessageModel ToChatMessageModel(IChatServiceConnection chatServiceConnection)
         {
             return new ChatMessageModel()
             {
                 Id = SlackTimeSent,
-                Provider = ProviderKind.Slack,
+                Provider = ChatServiceKind.Slack,
+                ProviderInstance = chatServiceConnection.Name,
                 AuthorId = SlackUserId,
                 Body = Text,
                 ChannelId = SlackChannelId,
                 TimeSent = DateTimeOffset.FromUnixTimeSeconds(
                     long.Parse(SlackTimeSent.Split(".")[0])),
-                ThreadingId = SlackThreadId
+                ThreadingId = SlackThreadId,
+                FromChatServiceConnection = chatServiceConnection,
+                IsFromTheorem = (SlackUserId == chatServiceConnection.UserId),
+                // This logic may be a little too rudimentary to handle all edge cases,
+                // but it's fine for now:
+                IsMentioningTheorem = Text.Contains($"<@{chatServiceConnection.UserId}>")
             };
         }
     }
