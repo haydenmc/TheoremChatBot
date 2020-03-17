@@ -228,5 +228,10 @@ namespace Theorem.ChatServices
                 eventHandler(this, message);
             }
         }
+
+        public Task<string> GetChannelIdFromChannelNameAsync(string channelName)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

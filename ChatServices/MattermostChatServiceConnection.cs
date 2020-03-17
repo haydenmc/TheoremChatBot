@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.WebSockets;
@@ -55,10 +57,9 @@ namespace Theorem.ChatServices
         {
             get
             {
-                return _userId;
+                return _user.Id;
             }
         }
-        private string _userId;
 
         /// <summary>
         /// URL of the server to connect to defined by configuration values
@@ -87,6 +88,16 @@ namespace Theorem.ChatServices
         /// successfully authenticated or not.
         /// </summary>
         private bool _connectionAuthenticated = false;
+
+        /// <summary>
+        /// Mattermost user model for our bot user
+        /// </summary>
+        private MattermostUserModel _user;
+
+        /// <summary>
+        /// A list of teams we are a member of.
+        /// </summary>
+        private List<MattermostTeamModel> _teams = new List<MattermostTeamModel>();
 
         /// <summary>
         /// Event that fires when connected
@@ -120,6 +131,12 @@ namespace Theorem.ChatServices
         {
             _logger.LogInformation("Connecting to Mattermost server {server}...",
                 _serverHostname);
+
+            // Pull user info
+            await populateUserInfoAsync();
+
+            // Pull team information
+            await populateTeamsInfoAsync();
 
             // Connect to websocket endpoint
             var webSocketClient = new ClientWebSocket();
@@ -159,7 +176,6 @@ namespace Theorem.ChatServices
         /// </param>
         private async Task receive(ClientWebSocket webSocketClient)
         {
-            onConnected();
             while (webSocketClient.State == WebSocketState.Open)
             {
                 StringBuilder messageBuilder = new StringBuilder();
@@ -218,7 +234,7 @@ namespace Theorem.ChatServices
             {
                 _logger.LogDebug("Received 'hello' message. Our user ID is '{userid}'.",
                     message.Broadcast.UserId);
-                _userId = message.Broadcast.UserId;
+                onConnected();
             }
             else if (messageType == typeof(MattermostPostedEventDataModel))
             {
@@ -265,6 +281,55 @@ namespace Theorem.ChatServices
             return httpClient;
         }
 
+        private async Task populateUserInfoAsync()
+        {
+            using (var httpClient = getHttpClient())
+            {
+                var result = await httpClient.GetAsync("api/v4/users/me");
+                if (!result.IsSuccessStatusCode)
+                {
+                    _logger.LogError("Encountered error code {code} calling {uri}: {msg}",
+                        result.StatusCode,
+                        result.Headers.Location,
+                        result.ReasonPhrase);
+                    return;
+                }
+                else
+                {
+                    var content = await result.Content.ReadAsStringAsync();
+                    _user = JsonConvert.DeserializeObject<MattermostUserModel>(content);
+                    _logger.LogInformation("Received Mattermost user info - {id}: {name}",
+                        _user.Id,
+                        _user.Username);
+                    return;
+                }
+            }
+        }
+
+        private async Task populateTeamsInfoAsync()
+        {
+            using (var httpClient = getHttpClient())
+            {
+                var result = await httpClient.GetAsync("api/v4/users/me/teams");
+                if (!result.IsSuccessStatusCode)
+                {
+                    _logger.LogError("Encountered error code {code} calling {uri}: {msg}",
+                        result.StatusCode,
+                        result.Headers.Location,
+                        result.ReasonPhrase);
+                    return;
+                }
+                else
+                {
+                    var content = await result.Content.ReadAsStringAsync();
+                    _teams = JsonConvert.DeserializeObject<List<MattermostTeamModel>>(content);
+                    _logger.LogInformation("Received Mattermost team info: {teams}",
+                        String.Join(", ", _teams.Select(t => $"{t.Id}: {t.DisplayName}")));
+                    return;
+                }
+            }
+        }
+
         /// <summary>
         /// Send a message to the channel with the given ID
         /// </summary>
@@ -286,6 +351,44 @@ namespace Theorem.ChatServices
                     "application/json");
                 var result = await httpClient.PostAsync("api/v4/posts", content);
                 // TODO: Parse result, handle errors, retry, etc.
+            }
+        }
+
+        public async Task<string> GetChannelIdFromChannelNameAsync(string channelName)
+        {
+            if (_teams.Count <= 0)
+            {
+                _logger.LogError("Couldn't query channel IDs - no teams present.");
+                return "";
+            }
+            var teamId = _teams.First().Id;
+            using (var httpClient = getHttpClient())
+            {
+                var result = await httpClient.GetAsync($"api/v4/teams/{teamId}/channels/name/{channelName}");
+                if (!result.IsSuccessStatusCode)
+                {
+                    _logger.LogError("Encountered error code {code} calling {uri}: {msg}",
+                        result.StatusCode,
+                        result.Headers.Location,
+                        result.ReasonPhrase);
+                    return "";
+                }
+                else
+                {
+                    var content = await result.Content.ReadAsStringAsync();
+                    var parsedContent = JObject.Parse(content);
+                    if (parsedContent.ContainsKey("id"))
+                    {
+                        return parsedContent.GetValue("id").ToObject<string>();
+                    }
+                    else
+                    {
+                        _logger.LogError(
+                            "Could not find 'id' value in channel query response: {response}",
+                            content);
+                        return "";
+                    }
+                }
             }
         }
     }
