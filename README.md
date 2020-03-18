@@ -17,6 +17,14 @@ More docs later. I'm just using this to store some useful info.
             "Service": "Slack",
             "ApiToken": "yourapitokenhere",
             "Middleware": [ "Echo" ]
+        },
+        "WarmItUpMumble": {
+            "Service": "Mumble",
+            "ServerHostname": "",
+            "ServerPort": 64738,
+            "Username": "Theorem",
+            "ServerPassword": "",
+            "Middleware": [ ]
         }
     },
     "Middleware": {
