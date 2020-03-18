@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Theorem.ChatServices;
 using Theorem.Middleware;
 using Theorem.Models;
+using Theorem.Utility;
 
 namespace Theorem
 {
@@ -100,8 +101,26 @@ namespace Theorem
                 
                 // Connect to chat providers!
                 var chatServices = scope.Resolve<IEnumerable<IChatServiceConnection>>();
-                await Task.WhenAll(chatServices.Select(c => c.StartAsync()));
+                await Task.WhenAll(
+                    chatServices.Select(c => 
+                        TaskUtilities.ExpontentialRetryAsync(
+                            c.StartAsync,
+                            (e, r) => onChatServiceConnectionInterruption(c, e, r)))
+                );
             }
+        }
+
+        private void onChatServiceConnectionInterruption(
+            IChatServiceConnection connection,
+            Exception exception,
+            (uint retryNumber, uint nextRetrySeconds) retries)
+        {
+            _logger.LogError("{c} connection threw exception. " + 
+                "retry {n} in {s} seconds. Exception: {e}",
+                connection.Name,
+                retries.retryNumber,
+                retries.nextRetrySeconds,
+                exception.Message);
         }
 
         private void registerMiddleware(ContainerBuilder containerBuilder)

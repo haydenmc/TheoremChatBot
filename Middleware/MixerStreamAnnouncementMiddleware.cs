@@ -12,6 +12,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Theorem.ChatServices;
 using Theorem.Models;
+using Theorem.Utility;
 
 namespace Theorem.Middleware
 {
@@ -110,7 +111,9 @@ namespace Theorem.Middleware
 
             _logger.LogInformation("Starting MixerStreamAnnouncement Middleware...");
             subscribeToChatServiceConnectedEvents();
-            startMixerConnection();
+            TaskUtilities
+                .ExpontentialRetryAsync(startMixerConnection, onConnectionInterrupted)
+                .FireAndForget();
         }
 
         public MiddlewareResult ProcessMessage(ChatMessageModel message)
@@ -124,6 +127,16 @@ namespace Theorem.Middleware
             {
                 chatService.Connected += onChatServiceConnected;
             }
+        }
+
+        private void onConnectionInterrupted(Exception exception,
+            (uint retryNumber, uint nextRetrySeconds) retries)
+        {
+            _logger.LogError("Mixer connection threw exception. " + 
+                "retry {n} in {s} seconds. Exception: {e}",
+                retries.retryNumber,
+                retries.nextRetrySeconds,
+                exception.Message);
         }
 
         private async void onChatServiceConnected(object sender, EventArgs e)
@@ -167,7 +180,7 @@ namespace Theorem.Middleware
             return httpClient;
         }
 
-        private async void startMixerConnection()
+        private async Task startMixerConnection()
         {
             _logger.LogInformation("Looking up Channel IDs to subscribe to...");
             foreach (var username in _usernames)

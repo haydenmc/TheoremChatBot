@@ -11,17 +11,28 @@ More docs later. I'm just using this to store some useful info.
             "Service": "Mattermost",
             "ServerHostname": "chat.myserver.com",
             "AccessToken": "youraccesstokenhere",
-            "Middleware": ["Echo"]
+            "Middleware": [ "Echo", "MixerStreamAnnouncement" ]
         },
         "WarmItUpSlack": {
             "Service": "Slack",
             "ApiToken": "yourapitokenhere",
-            "Middleware": ["Echo"]
+            "Middleware": [ "Echo" ]
         }
     },
     "Middleware": {
         "Echo": {
             "Enabled": true
+        },
+        "MixerStreamAnnouncement": {
+            "Enabled": true,
+            "ClientId": "CLIENTIDHERE",
+            "MixerChannels": [ "HammyCheesy" ],
+            "AnnounceChannels": [
+                {
+                    "ChatServiceName": "WarmItUpMattermost",
+                    "ChannelName": "gaming"
+                }
+            ]
         }
     }
 }
