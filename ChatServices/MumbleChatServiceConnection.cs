@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Net;
 using System.Net.Security;
@@ -19,6 +20,23 @@ using Theorem.Models;
 
 namespace Theorem.ChatServices
 {
+    public static class MumbleExtensions
+    {
+        public static UserModel ToUserModel(
+            this User user,
+            IChatServiceConnection chatServiceConnection)
+        {
+            return new UserModel()
+            {
+                Id = user.Id.ToString(),
+                Provider = ChatServiceKind.Mumble,
+                Name = user.Name,
+                DisplayName = user.Name,
+                FromChatServiceConnection = chatServiceConnection
+            };
+        }
+    }
+
     public class TheoremMumbleProtocol :
         IMumbleProtocol
     {
@@ -35,6 +53,10 @@ namespace Theorem.ChatServices
                 return _channelDictionary.Values;
             }
         }
+
+        public EventHandler<User> UserAdded;
+
+        public EventHandler<User> UserRemoved;
 
         private readonly ConcurrentDictionary<UInt32, Channel> _channelDictionary = 
             new ConcurrentDictionary<UInt32, Channel>();
@@ -169,7 +191,7 @@ namespace Theorem.ChatServices
             if (_userDictionary.TryRemove(userRemove.Session, out user))
             {
                 user.Channel = null;
-                //UserLeft(user);
+                onUserRemoved(user);
             }
 
             if (user != null && user.Equals(LocalUser))
@@ -227,17 +249,17 @@ namespace Theorem.ChatServices
                     user.Comment = userState.Comment;
                 }
 
-                if (userState.ShouldSerializeChannelId())
-                {
-                    user.Channel = _channelDictionary[userState.ChannelId];
-                }
-                else if (user.Channel == null)
-                {
-                    user.Channel = RootChannel;
-                }
+                // if (userState.ShouldSerializeChannelId())
+                // {
+                //     user.Channel = _channelDictionary[userState.ChannelId];
+                // }
+                // else if (user.Channel == null)
+                // {
+                //     user.Channel = RootChannel;
+                // }
 
                 //if (added)
-                // UserJoined(user);
+                onUserAdded(user);
             }
         }
 
@@ -252,6 +274,30 @@ namespace Theorem.ChatServices
 
         public void Version(MumbleProto.Version version)
         { }
+
+        /// <summary>
+        /// Used to raise the UserAdded event.
+        /// </summary>
+        protected virtual void onUserAdded(User user)
+        {
+            var eventHandler = UserAdded;
+            if (eventHandler != null)
+            {
+                eventHandler(this, user);
+            }
+        }
+
+        /// <summary>
+        /// Used to raise the UserRemoved event.
+        /// </summary>
+        protected virtual void onUserRemoved(User user)
+        {
+            var eventHandler = UserRemoved;
+            if (eventHandler != null)
+            {
+                eventHandler(this, user);
+            }
+        }
     }
 
     public class MumbleChatServiceConnection :
@@ -278,7 +324,33 @@ namespace Theorem.ChatServices
             }
         }
 
-        public string UserId => throw new NotImplementedException();
+        /// <summary>
+        /// User ID assigned to us by Mumble
+        /// </summary>
+        public string UserId
+        {
+            get
+            {
+                return "";
+            }
+        }
+
+        /// <summary>
+        /// Collection of users present on this chat service connection
+        /// </summary>
+        public ObservableCollection<UserModel> Users { get; private set; }
+            = new ObservableCollection<UserModel>();
+
+        /// <summary>
+        /// Collection of users currently online on this chat service connection
+        /// </summary>
+        public ObservableCollection<UserModel> OnlineUsers
+        {
+            get
+            {
+                return Users;
+            }
+        }
 
         /// <summary>
         /// Hostname of the server to connect to defined by configuration values
@@ -336,12 +408,13 @@ namespace Theorem.ChatServices
 
         public async Task<string> GetChannelIdFromChannelNameAsync(string channelName)
         {
+            // TODO
             return "";
         }
 
         public async Task SendMessageToChannelIdAsync(string channelId, string body)
         {
-            
+            // TODO
         }
 
         /// <summary>
@@ -360,6 +433,9 @@ namespace Theorem.ChatServices
                 _serverHostname);
 
             TheoremMumbleProtocol protocol = new TheoremMumbleProtocol();
+            protocol.UserAdded += mumbleUserAdded;
+            protocol.UserRemoved += mumbleUserRemoved;
+
             IPAddress ipAddress = Dns
                 .GetHostAddresses(_serverHostname)
                 .First(a => a.AddressFamily == AddressFamily.InterNetwork);
@@ -372,6 +448,32 @@ namespace Theorem.ChatServices
                 mumbleUpdateLoop(connection),
                 waitForConnection(protocol)
             });
+        }
+
+        private void mumbleUserRemoved(object sender, User e)
+        {
+            var existing = Users.SingleOrDefault(u => u.Id == e.Id.ToString());
+            if (existing != null)
+            {
+                Users.Remove(existing);
+            }
+            _logger.LogInformation("User removed: {id}: {name}",
+                existing.Id,
+                existing.Name);
+        }
+
+        private void mumbleUserAdded(object sender, User e)
+        {
+            var existing = Users.SingleOrDefault(u => u.Id == e.Id.ToString());
+            if (existing != null)
+            {
+                Users.Remove(existing);
+            }
+            var newUserModel = e.ToUserModel(this);
+            _logger.LogInformation("New user: {id}: {name}",
+                newUserModel.Id,
+                newUserModel.Name);
+            Users.Add(newUserModel);
         }
 
         /// <summary>
@@ -411,6 +513,11 @@ namespace Theorem.ChatServices
                     }
                 }
             });
+        }
+
+        public async Task SetChannelTopicAsync(string channelId, string topic)
+        {
+            // TODO
         }
     }
 }

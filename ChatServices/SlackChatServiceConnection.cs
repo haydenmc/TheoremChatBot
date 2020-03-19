@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Net.Http;
 using System.Net.WebSockets;
@@ -69,6 +70,20 @@ namespace Theorem.ChatServices
                 return Self.Id;
             }
         }
+
+        /// <summary>
+        /// Collection of users present on this chat service connection
+        /// </summary>
+        // TODO: Not implemented
+        public ObservableCollection<UserModel> Users { get; private set; }
+            = new ObservableCollection<UserModel>();
+
+        /// <summary>
+        /// Collection of users currently online on this chat service connection
+        /// </summary>
+        // TODO: Not implemented
+        public ObservableCollection<UserModel> OnlineUsers { get; private set; }
+            = new ObservableCollection<UserModel>();
         
         /// <summary>
         /// Settings used to deserialize incoming events into the proper types.
@@ -229,9 +244,15 @@ namespace Theorem.ChatServices
             }
         }
 
-        public Task<string> GetChannelIdFromChannelNameAsync(string channelName)
+        public async Task<string> GetChannelIdFromChannelNameAsync(string channelName)
         {
-            throw new NotImplementedException();
+            // TODO
+            return "";
+        }
+
+        public async Task SetChannelTopicAsync(string channelId, string topic)
+        {
+            // TODO
         }
     }
 }
