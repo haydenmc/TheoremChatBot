@@ -1,8 +1,11 @@
+using System;
 using Newtonsoft.Json;
+using Theorem.ChatServices;
 
 namespace Theorem.Models.Mattermost
 {
-    public class MattermostUserModel
+    public class MattermostUserModel : 
+        IProvideUserModel
     {
         // {
         //     "id":"umowrqwsqbrw7bfjhkokmcep7a",
@@ -47,5 +50,26 @@ namespace Theorem.Models.Mattermost
 
         [JsonProperty("username")]
         public string Username { get; set; }
+
+        [JsonProperty("nickname")]
+        public string Nickname { get; set; }
+
+        [JsonProperty("first_name")]
+        public string FirstName { get; set; }
+
+        [JsonProperty("last_name")]
+        public string LastName { get; set; }
+
+        public UserModel ToUserModel(IChatServiceConnection chatServiceConnection)
+        {
+            return new UserModel()
+            {
+                Id = Id,
+                Provider = ChatServiceKind.Mattermost,
+                Name = Username,
+                DisplayName = String.Join(" ", new string[] { FirstName, LastName }),
+                FromChatServiceConnection = chatServiceConnection
+            };
+        }
     }
 }

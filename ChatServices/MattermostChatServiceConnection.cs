@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -60,6 +61,18 @@ namespace Theorem.ChatServices
                 return _user.Id;
             }
         }
+
+        /// <summary>
+        /// Collection of users present on this chat service connection
+        /// </summary>
+        public ObservableCollection<UserModel> Users { get; private set; }
+            = new ObservableCollection<UserModel>();
+
+        /// <summary>
+        /// Collection of users currently online on this chat service connection
+        /// </summary>
+        public ObservableCollection<UserModel> OnlineUsers { get; private set; }
+            = new ObservableCollection<UserModel>();
 
         /// <summary>
         /// URL of the server to connect to defined by configuration values
@@ -133,10 +146,14 @@ namespace Theorem.ChatServices
                 _serverHostname);
 
             // Pull user info
-            await populateUserInfoAsync();
+            await populateMyUserInfoAsync();
 
             // Pull team information
             await populateTeamsInfoAsync();
+
+            // Pull user list
+            await populateUserListAsync();
+            await populateOnlineUserListAsync();
 
             // Connect to websocket endpoint
             var webSocketClient = new ClientWebSocket();
@@ -281,7 +298,7 @@ namespace Theorem.ChatServices
             return httpClient;
         }
 
-        private async Task populateUserInfoAsync()
+        private async Task populateMyUserInfoAsync()
         {
             using (var httpClient = getHttpClient())
             {
@@ -301,6 +318,75 @@ namespace Theorem.ChatServices
                     _logger.LogInformation("Received Mattermost user info - {id}: {name}",
                         _user.Id,
                         _user.Username);
+                    return;
+                }
+            }
+        }
+
+        private async Task populateUserListAsync()
+        {
+            Users.Clear();
+            using (var httpClient = getHttpClient())
+            {
+                var result = await httpClient.GetAsync("api/v4/users");
+                if (!result.IsSuccessStatusCode)
+                {
+                    _logger.LogError("Encountered error code {code} calling {uri}: {msg}",
+                        result.StatusCode,
+                        result.Headers.Location,
+                        result.ReasonPhrase);
+                    return;
+                }
+                else
+                {
+                    var content = await result.Content.ReadAsStringAsync();
+                    var parsedUsers = JsonConvert.DeserializeObject
+                        <IEnumerable<MattermostUserModel>>(content);
+                    Users = new ObservableCollection<UserModel>(
+                        parsedUsers.Select(u => u.ToUserModel(this)));
+                    _logger.LogInformation("Received Mattermost user list - {count} users.",
+                        Users.Count);
+                    return;
+                }
+            }
+        }
+
+        private async Task populateOnlineUserListAsync()
+        {
+            OnlineUsers.Clear();
+            using (var httpClient = getHttpClient())
+            {
+                var postPayload = Users.Select(u => u.Id);
+                var postPayloadString = JsonConvert.SerializeObject(postPayload);
+                var postContent = new StringContent(
+                    postPayloadString,
+                    Encoding.UTF8,
+                    "application/json");
+                var result = await httpClient.PostAsync("api/v4/users/status/ids", postContent);
+                if (!result.IsSuccessStatusCode)
+                {
+                    _logger.LogError("Encountered error code {code} calling {uri}: {msg}",
+                        result.StatusCode,
+                        result.Headers.Location,
+                        result.ReasonPhrase);
+                    return;
+                }
+                else
+                {
+                    var content = await result.Content.ReadAsStringAsync();
+                    var parsedUsers = JsonConvert.DeserializeObject
+                        <IEnumerable<MattermostStatusModel>>(content);
+                    var parsedOnlineUsers = parsedUsers.Where(u => u.Status == "online");
+                    foreach (var onlineUser in parsedOnlineUsers)
+                    {
+                        var onlineUserRef = Users.SingleOrDefault(u => u.Id == onlineUser.UserId);
+                        if (onlineUserRef != null)
+                        {
+                            OnlineUsers.Add(onlineUserRef);
+                        }
+                    }
+                    _logger.LogInformation("Received Mattermost online user list - {count} users.",
+                        OnlineUsers.Count);
                     return;
                 }
             }
@@ -388,6 +474,31 @@ namespace Theorem.ChatServices
                             content);
                         return "";
                     }
+                }
+            }
+        }
+
+        public async Task SetChannelTopicAsync(string channelId, string topic)
+        {
+            using (var httpClient = getHttpClient())
+            {
+                var payloadObject = new {
+                    header = topic
+                };
+                var payloadString = JsonConvert.SerializeObject(payloadObject);
+                _logger.LogDebug("Setting channel header: {payload}", payloadString);
+                var content = new StringContent(
+                    payloadString,
+                    Encoding.UTF8,
+                    "application/json");
+                var result = await httpClient.PutAsync($"api/v4/channels/{channelId}/patch", content);
+                var resultContent = await result.Content.ReadAsStringAsync();
+                if (!result.IsSuccessStatusCode)
+                {
+                    _logger.LogError("Encountered error code {code} calling {uri}: {msg}",
+                        result.StatusCode,
+                        result.Headers.Location,
+                        result.ReasonPhrase);
                 }
             }
         }

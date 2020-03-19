@@ -1,4 +1,5 @@
 using System;
+using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using Theorem.Models;
 
@@ -10,6 +11,10 @@ namespace Theorem.ChatServices
 
         string UserId { get; }
 
+        ObservableCollection<UserModel> Users { get; }
+
+        ObservableCollection<UserModel> OnlineUsers { get; }
+
         event EventHandler<EventArgs> Connected;
 
         event EventHandler<ChatMessageModel> NewMessage;
@@ -19,5 +24,7 @@ namespace Theorem.ChatServices
         Task SendMessageToChannelIdAsync(string channelId, string body);
 
         Task<string> GetChannelIdFromChannelNameAsync(string channelName);
+
+        Task SetChannelTopicAsync(string channelId, string topic);
     }
 }
