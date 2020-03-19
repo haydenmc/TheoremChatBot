@@ -41,6 +41,17 @@ More docs later. I'm just using this to store some useful info.
                     "ChannelName": "gaming"
                 }
             ]
+        },
+        "AttendanceRelay": {
+            "Enabled": true,
+            "Relays": [
+                {
+                    "FromChatServiceName": "WarmItUpMumble",
+                    "ToChatServiceName": "WarmItUpMattermost",
+                    "ToChannelName": "gaming",
+                    "Prefix": "Mumble: "
+                }
+            ]
         }
     }
 }
