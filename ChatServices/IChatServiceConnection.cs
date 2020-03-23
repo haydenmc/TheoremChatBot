@@ -11,6 +11,12 @@ namespace Theorem.ChatServices
 
         string UserId { get; }
 
+        string UserName { get; }
+
+        string MentionMessageRegExPrefix { get; }
+
+        string PrivateMessageRegExPrefix { get; }
+
         ObservableCollection<UserModel> Users { get; }
 
         ObservableCollection<UserModel> OnlineUsers { get; }

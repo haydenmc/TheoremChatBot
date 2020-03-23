@@ -32,5 +32,8 @@ namespace Theorem.Models
 
         [NotMapped]
         public virtual bool IsMentioningTheorem { get; set; }
+
+        [NotMapped]
+        public virtual bool IsPrivateMessage { get; set; }
     }
 }

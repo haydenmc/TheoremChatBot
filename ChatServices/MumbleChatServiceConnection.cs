@@ -336,6 +336,39 @@ namespace Theorem.ChatServices
         }
 
         /// <summary>
+        /// User name of the bot in this service
+        /// </summary>
+        public string UserName
+        {
+            get
+            {
+                return this._username;
+            }
+        }
+
+        /// <summary>
+        /// Prefix for message that mentions us in this provider
+        /// </summary>
+        public string MentionMessageRegExPrefix
+        {
+            get
+            {
+                return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Prefix for message that mentions us in this provider
+        /// </summary>
+        public string PrivateMessageRegExPrefix
+        {
+            get
+            {
+                return string.Empty;
+            }
+        }
+
+        /// <summary>
         /// Collection of users present on this chat service connection
         /// </summary>
         public ObservableCollection<UserModel> Users { get; private set; }

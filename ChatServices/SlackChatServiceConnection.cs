@@ -72,6 +72,39 @@ namespace Theorem.ChatServices
         }
 
         /// <summary>
+        /// User name of the bot in this service
+        /// </summary>
+        public string UserName
+        {
+            get
+            {
+                return Self.Name;
+            }
+        }
+
+        /// <summary>
+        /// Prefix for message that mentions us in this provider
+        /// </summary>
+        public string MentionMessageRegExPrefix
+        {
+            get
+            {
+                return ".*<@{userId}>\\s";
+            }
+        }
+
+        /// <summary>
+        /// Prefix for message that mentions us in this provider
+        /// </summary>
+        public string PrivateMessageRegExPrefix
+        {
+            get
+            {
+                return ".*";
+            }
+        }
+
+        /// <summary>
         /// Collection of users present on this chat service connection
         /// </summary>
         // TODO: Not implemented
