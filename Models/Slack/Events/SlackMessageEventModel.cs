@@ -63,7 +63,8 @@ namespace Theorem.Models.Slack.Events
                 IsFromTheorem = (SlackUserId == chatServiceConnection.UserId),
                 // This logic may be a little too rudimentary to handle all edge cases,
                 // but it's fine for now:
-                IsMentioningTheorem = Text.Contains($"<@{chatServiceConnection.UserId}>")
+                IsMentioningTheorem = Text.Contains($"<@{chatServiceConnection.UserId}>"),
+                IsPrivateMessage = string.IsNullOrEmpty(SlackChannelId)
             };
         }
     }

@@ -115,7 +115,8 @@ namespace Theorem.Models.Mattermost.EventData
                 IsMentioningTheorem = 
                     ((Mentions == null) ?
                         false :
-                        Mentions.Contains(chatServiceConnection.UserId))
+                        Mentions.Contains(chatServiceConnection.UserId)),
+                IsPrivateMessage = string.IsNullOrEmpty(Post.ChannelId)
             };
         }
     }
