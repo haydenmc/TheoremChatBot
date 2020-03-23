@@ -94,17 +94,6 @@ namespace Theorem.ChatServices
         }
 
         /// <summary>
-        /// Prefix for message that mentions us in this provider
-        /// </summary>
-        public string PrivateMessageRegExPrefix
-        {
-            get
-            {
-                return ".*";
-            }
-        }
-
-        /// <summary>
         /// Collection of users present on this chat service connection
         /// </summary>
         // TODO: Not implemented

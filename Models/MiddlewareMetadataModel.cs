@@ -3,7 +3,7 @@ using Theorem.ChatServices;
 
 namespace Theorem.Models
 {
-    public class MiddlewareMetadata
+    public class MiddlewareMetadataModel
     {
         public string Name { get; set; }
 

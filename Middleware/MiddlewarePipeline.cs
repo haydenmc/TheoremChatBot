@@ -37,20 +37,11 @@ namespace Theorem.Middleware
 
         private string ProcessSummonMessage(ISummonable middleware, IChatServiceConnection chatServiceConnection, ChatMessageModel message)
         {
-            var injectVariables = new {
-                userId = chatServiceConnection.UserId,
-                userName = chatServiceConnection.UserName
-            };
-
             // expect exactly 1 instance of the action verb
             var verbMatchPattern = string.Concat(middleware.GetSummonVerb(), "{1}\\s?(");
             // match for message format "<bot mention> <verb> *rest of message*" and return *rest of message* to middleware
-            var testPattern = string.Concat(
-                message.IsPrivateMessage ? chatServiceConnection.PrivateMessageRegExPrefix : chatServiceConnection.MentionMessageRegExPrefix, 
-                verbMatchPattern, 
-                middleware.MentionRegex,
-                ")");
-            Regex testRegex = new Regex(testPattern.Inject(injectVariables), RegexOptions.IgnoreCase);
+            var testPattern = string.Concat(verbMatchPattern, middleware.MentionRegex, ")");
+            Regex testRegex = new Regex(testPattern, RegexOptions.IgnoreCase);
 
             Match match = testRegex.Match(message.Body);
 
@@ -65,18 +56,10 @@ namespace Theorem.Middleware
 
         private bool TestHelpMessage(ISummonable middleware, IChatServiceConnection chatServiceConnection, ChatMessageModel message)
         {
-            var injectVariables = new {
-                userId = chatServiceConnection.UserId,
-                userName = chatServiceConnection.UserName
-            };
-
             // expect exactly 1 instance of the action verb
             var helpMatchPattern = string.Concat(middleware.GetSummonVerb(), "{1}\\s?help\\s*");
             // match for message format "<bot mention> <verb> *rest of message*" and return *rest of message* to middleware
-            var testPattern = string.Concat(
-                message.IsPrivateMessage ? chatServiceConnection.PrivateMessageRegExPrefix : chatServiceConnection.MentionMessageRegExPrefix, 
-                helpMatchPattern);
-            Regex testRegex = new Regex(testPattern.Inject(injectVariables), RegexOptions.IgnoreCase);
+            Regex testRegex = new Regex(helpMatchPattern, RegexOptions.IgnoreCase);
 
             Match match = testRegex.Match(message.Body);
 

@@ -1,6 +1,8 @@
 using System;
+using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using Theorem.ChatServices;
+using Theorem.Utility;
 
 namespace Theorem.Models.Slack.Events
 {
@@ -23,9 +25,27 @@ namespace Theorem.Models.Slack.Events
         public ChatMessageModel ToChatMessageModel(IChatServiceConnection chatServiceConnection)
         {
             // if we receive a message in a channel with only one other member, we assume it's a private message
+            // TODO: figure out better way to detect private messages
             var getChannelMemberCountTask = chatServiceConnection.GetMemberCountFromChannelIdAsync(SlackChannelId);
             getChannelMemberCountTask.Wait();
             var channelMemberCount = getChannelMemberCountTask.Result;
+
+            var injectVariables = new {
+                userId = chatServiceConnection.UserId
+            };
+            var rawTestPattern = string.Concat(chatServiceConnection.MentionMessageRegExPrefix, "(.*)");
+            var mentionTestPattern = rawTestPattern.Inject(injectVariables);
+            Regex mentionRegex = new Regex(mentionTestPattern);
+
+            bool isMention = false;
+            string text = Text;
+            Match match = mentionRegex.Match(text);
+            if(match.Success)
+            {
+                isMention = true;
+                text = match.Groups[1].ToString();
+            }
+
 
             return new ChatMessageModel()
             {
@@ -33,7 +53,7 @@ namespace Theorem.Models.Slack.Events
                 Provider = ChatServiceKind.Slack,
                 ProviderInstance = chatServiceConnection.Name,
                 AuthorId = SlackUserId,
-                Body = Text,
+                Body = text,
                 ChannelId = SlackChannelId,
                 TimeSent = DateTimeOffset.FromUnixTimeSeconds(
                     long.Parse(SlackTimeSent.Split(".")[0])),
@@ -42,7 +62,7 @@ namespace Theorem.Models.Slack.Events
                 IsFromTheorem = (SlackUserId == chatServiceConnection.UserId),
                 // This logic may be a little too rudimentary to handle all edge cases,
                 // but it's fine for now:
-                IsMentioningTheorem = Text.Contains($"<@{chatServiceConnection.UserId}>"),
+                IsMentioningTheorem = isMention,
                 IsPrivateMessage = channelMemberCount == 2
             };
         }
