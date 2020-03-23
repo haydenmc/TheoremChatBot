@@ -3,7 +3,11 @@ using Theorem.ChatServices;
 
 namespace Theorem.Models
 {
+<<<<<<< HEAD
     public class MiddlewareMetadataModel
+=======
+    public class MiddlewareMetadata
+>>>>>>> address some PR comments
     {
         public string Name { get; set; }
 

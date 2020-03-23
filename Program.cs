@@ -168,7 +168,17 @@ namespace Theorem
                     _logger.LogInformation(
                         "Configuration not found for middleware {name}. Skipping...",
                         middlewareType.Key);
+<<<<<<< HEAD
                     middlewareMetadata.Add(metadata);
+=======
+                    middlewareMetadata.Add(new MiddlewareMetadataModel() 
+                        {
+                            Name = middlewareType.Key,
+                            Enabled = false,
+                            Configured = false,
+                            ExecutionOrderNumber = 0
+                        });
+>>>>>>> address some PR comments
                     continue;
                 }
 
@@ -179,7 +189,17 @@ namespace Theorem
                     _logger.LogInformation(
                         "{name} configuration 'Enabled' property not true. Skipping...",
                         middlewareType.Key);
+<<<<<<< HEAD
                     middlewareMetadata.Add(metadata);
+=======
+                    middlewareMetadata.Add(new MiddlewareMetadataModel() 
+                        {
+                            Name = middlewareType.Key,
+                            Enabled = false,
+                            Configured = true,
+                            ExecutionOrderNumber = getExecutionOrderNumber(typeConfig)
+                        });
+>>>>>>> address some PR comments
                     continue;
                 }
 
@@ -194,6 +214,20 @@ namespace Theorem
                         new TypedParameter(typeof(ConfigurationSection), typeConfig))
                     .As<IMiddleware>()
                     .SingleInstance();
+<<<<<<< HEAD
+=======
+                
+                var isSummonable = typeof(ISummonable).IsAssignableFrom(middlewareType.Value);
+                middlewareMetadata.Add(new MiddlewareMetadataModel() 
+                    {
+                        Name = middlewareType.Key,
+                        Enabled = true,
+                        Configured = true,
+                        ExecutionOrderNumber = getExecutionOrderNumber(typeConfig),
+                        IsSummonable = isSummonable,
+                        SummonVerb = isSummonable ? middlewareType.Value.GetSummonVerb() : string.Empty
+                    });
+>>>>>>> address some PR comments
             }
 
             // Register BotMetadataProvider instance
