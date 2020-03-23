@@ -287,5 +287,26 @@ namespace Theorem.ChatServices
         {
             // TODO
         }
+
+        public async Task<int> GetMemberCountFromChannelIdAsync(string channelId)
+        {
+            using (var httpClient = new HttpClient())
+            {
+                httpClient.BaseAddress = new Uri(BaseApiUrl);
+                var postData = new FormUrlEncodedContent(new[] { 
+                    new KeyValuePair<string, string>("token", _apiToken), 
+                    new KeyValuePair<string, string>("channel", channelId), 
+                    new KeyValuePair<string, string>("include_num_members", "true")
+                }); 
+                var result = await httpClient.PostAsync("conversations.info", postData);
+
+                result.EnsureSuccessStatusCode();
+
+                var responseContent = await result.Content.ReadAsStringAsync();
+                var response = JsonConvert.DeserializeObject<SlackConversationInfoModel>(responseContent);
+
+                return response.Channel.MemberCount;
+            }
+        }
     }
 }

@@ -511,6 +511,29 @@ namespace Theorem.ChatServices
             }
         }
 
+        public async Task<int> GetMemberCountFromChannelIdAsync(string channelId)
+        {
+            // note: this currently only counts users from the first page of results, since this is sufficient for our current use cases
+            using (var httpClient = getHttpClient())
+            {
+                var result = await httpClient.GetAsync($"api/v4/channels/{channelId}/members");
+                if (!result.IsSuccessStatusCode)
+                {
+                    _logger.LogError("Encountered error code {code} calling {uri}: {msg}",
+                        result.StatusCode,
+                        result.Headers.Location,
+                        result.ReasonPhrase);
+                    return 0;
+                }
+                else
+                {
+                    var content = await result.Content.ReadAsStringAsync();
+                    var parsedContent = JArray.Parse(content);
+                    return parsedContent == null ? 0 : parsedContent.Count;
+                }
+            }
+        }
+
         public async Task SetChannelTopicAsync(string channelId, string topic)
         {
             using (var httpClient = getHttpClient())

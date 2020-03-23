@@ -552,5 +552,11 @@ namespace Theorem.ChatServices
         {
             // TODO
         }
+
+        public async Task<int> GetMemberCountFromChannelIdAsync(string channelId)
+        {
+            // TODO
+            return 0;
+        }
     }
 }

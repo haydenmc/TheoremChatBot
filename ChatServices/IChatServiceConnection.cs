@@ -31,6 +31,8 @@ namespace Theorem.ChatServices
 
         Task<string> GetChannelIdFromChannelNameAsync(string channelName);
 
+        Task<int> GetMemberCountFromChannelIdAsync(string channelId);
+
         Task SetChannelTopicAsync(string channelId, string topic);
     }
 }

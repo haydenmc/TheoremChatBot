@@ -72,7 +72,13 @@ namespace Theorem.Middleware
         public MiddlewareResult ProcessMessage(ChatMessageModel message)
         {
             // Ignore messages from ourself
-            if (message.IsFromTheorem || !message.IsMentioningTheorem)
+            if (message.IsFromTheorem)
+            {
+                return MiddlewareResult.Continue;
+            }
+
+            // Ignore messages that don't mention us, unless they're private messages
+            if (!message.IsMentioningTheorem && !message.IsPrivateMessage)
             {
                 return MiddlewareResult.Continue;
             }
