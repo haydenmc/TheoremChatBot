@@ -146,7 +146,7 @@ namespace Theorem
             _logger.LogInformation("Reading middleware configuration...");
             var middlewareConfigRoot = Configuration.GetSection("Middleware");
             var middlewareConfigs = middlewareConfigRoot.GetChildren();
-            var middlewareMetadata = new List<MiddlewareMetadata>();
+            var middlewareMetadata = new List<MiddlewareMetadataModel>();
             foreach (var middlewareType in middlewareTypes)
             {
                 var typeConfig = middlewareConfigs
@@ -156,7 +156,7 @@ namespace Theorem
                     _logger.LogInformation(
                         "Configuration not found for middleware {name}. Skipping...",
                         middlewareType.Key);
-                    middlewareMetadata.Add(new MiddlewareMetadata() 
+                    middlewareMetadata.Add(new MiddlewareMetadataModel() 
                         {
                             Name = middlewareType.Key,
                             Enabled = false,
@@ -170,7 +170,7 @@ namespace Theorem
                     _logger.LogInformation(
                         "{name} configuration 'Enabled' property not true. Skipping...",
                         middlewareType.Key);
-                    middlewareMetadata.Add(new MiddlewareMetadata() 
+                    middlewareMetadata.Add(new MiddlewareMetadataModel() 
                         {
                             Name = middlewareType.Key,
                             Enabled = false,
@@ -189,7 +189,7 @@ namespace Theorem
                     .SingleInstance();
                 
                 var isSummonable = typeof(ISummonable).IsAssignableFrom(middlewareType.Value);
-                middlewareMetadata.Add(new MiddlewareMetadata() 
+                middlewareMetadata.Add(new MiddlewareMetadataModel() 
                     {
                         Name = middlewareType.Key,
                         Enabled = true,

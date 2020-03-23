@@ -18,13 +18,13 @@ namespace Theorem.Providers
         /// <summary>
         /// List of names for all running middleware
         /// </summary>
-        public IEnumerable<MiddlewareMetadata> RunningMiddlewares { get; set; }
+        public IEnumerable<MiddlewareMetadataModel> RunningMiddlewares { get; set; }
         
         /// <summary>
         /// Constructs a new instance of SlackProvider, requires configuration for things like API token
         /// </summary>
         /// <param name="configuration">Configuration object</param>
-        public BotMetadataProvider(IEnumerable<MiddlewareMetadata> runningMiddlewares)
+        public BotMetadataProvider(IEnumerable<MiddlewareMetadataModel> runningMiddlewares)
         {
             this.RunningMiddlewares = runningMiddlewares;
         }

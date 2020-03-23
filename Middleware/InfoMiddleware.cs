@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Theorem.ChatServices;
 using Theorem.Models;
 using Theorem.Providers;
@@ -67,10 +68,14 @@ namespace Theorem.Middleware
             IEnumerable<IChatServiceConnection> chatServiceConnections,
             BotMetadataProvider botMetadataProvider)
         {
-            var orderedMiddlewareList = botMetadataProvider.RunningMiddlewares.Where(mw => mw.Enabled && mw.ExecutionOrderNumber != 0);
-            var unorderedMiddlewareList = botMetadataProvider.RunningMiddlewares.Where(mw => mw.Enabled && mw.ExecutionOrderNumber == 0 && mw.Configured);
-            var unconfiguredMiddlewareList = botMetadataProvider.RunningMiddlewares.Where(mw => mw.Enabled && !mw.Configured);
-            var disabledMiddlewareList = botMetadataProvider.RunningMiddlewares.Where(mw => !mw.Enabled);
+            var orderedMiddlewareList = botMetadataProvider.RunningMiddlewares
+                .Where(mw => mw.Enabled && mw.ExecutionOrderNumber != 0);
+            var unorderedMiddlewareList = botMetadataProvider.RunningMiddlewares
+                .Where(mw => mw.Enabled && mw.ExecutionOrderNumber == 0 && mw.Configured);
+            var unconfiguredMiddlewareList = botMetadataProvider.RunningMiddlewares
+                .Where(mw => mw.Enabled && !mw.Configured);
+            var disabledMiddlewareList = botMetadataProvider.RunningMiddlewares
+                .Where(mw => !mw.Enabled);
 
             // order middleware by 
             //   1. ordered enabled MW in execution order
@@ -89,7 +94,10 @@ namespace Theorem.Middleware
             );
 
             _orderedMiddleware = string.Join(" -> ", orderedMiddlewareNamesList);
-            _alphabeticallyOrderedMiddleware = string.Join(", ", botMetadataProvider.RunningMiddlewares.Select(mw => mw.Enabled ? mw.Name : mw.Name + " (d)").OrderBy(str => str));
+            _alphabeticallyOrderedMiddleware = string.Join(
+                ", ", 
+                botMetadataProvider.RunningMiddlewares
+                    .Select(mw => mw.Enabled ? mw.Name : mw.Name + " (d)").OrderBy(str => str));
             _disabledMiddleware = string.Join(", ", disabledMiddlewareList.Select(mw => mw.Name));
 
             this.chatServiceConnections = chatServiceConnections;
@@ -112,7 +120,8 @@ namespace Theorem.Middleware
             var serviceConnection = message.FromChatServiceConnection;
 
             var printList = message.Body.Contains("ordered") ? _orderedMiddleware : 
-                                (message.Body.Contains("disabled") ? _disabledMiddleware :_alphabeticallyOrderedMiddleware);
+                                (message.Body.Contains("disabled") ? _disabledMiddleware :
+                                _alphabeticallyOrderedMiddleware);
 
             serviceConnection
                 .SendMessageToChannelIdAsync(

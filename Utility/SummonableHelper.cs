@@ -12,22 +12,22 @@ namespace Theorem.Utility
         /// Get static Summon Verb value for ISummonable type
         /// </summary>
 		public static string GetSummonVerb(this Type t)
-		{
-			if (!typeof(ISummonable).IsAssignableFrom(t))
-			{
-				return string.Empty;
-			}
+        {
+            if (!typeof(ISummonable).IsAssignableFrom(t))
+            {
+                return string.Empty;
+            }
 
-			var prop = t.GetProperty(nameof(ISummonable.SummonVerb));
-			return prop?.GetValue(null, null).ToString();
-		}
+            var prop = t.GetProperty(nameof(ISummonable.SummonVerb));
+            return prop?.GetValue(null, null).ToString();
+        }
 
         /// <summary>
         /// Get static Summon Verb value for ISummonable object
         /// </summary>
 		public static string GetSummonVerb(this ISummonable o)
-		{
-			return o.GetType().GetSummonVerb();
-		}
+        {
+            return o.GetType().GetSummonVerb();
+        }
     }
 }
