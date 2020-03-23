@@ -116,7 +116,7 @@ namespace Theorem.Models.Mattermost.EventData
                     ((Mentions == null) ?
                         false :
                         Mentions.Contains(chatServiceConnection.UserId)),
-                IsPrivateMessage = string.IsNullOrEmpty(Post.ChannelId)
+                IsPrivateMessage = channelMemberCount == 2
             };
         }
     }
