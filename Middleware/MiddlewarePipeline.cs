@@ -1,39 +1,66 @@
 using System;
 using System.Collections.Generic;
-using Autofac;
+using System.Linq;
+using Microsoft.Extensions.Logging;
+using Theorem.ChatServices;
 using Theorem.Models;
-using Theorem.Models.Events;
-using Theorem.Providers;
 
 namespace Theorem.Middleware
 {
     public class MiddlewarePipeline
     {
-        private SlackProvider _slackProvider { get; set; }
-        private IEnumerable<Middleware> _middleware { get; set; }
+        private ILogger<MiddlewarePipeline> _logger;
+        private IEnumerable<IChatServiceConnection> _chatServiceConnections;
+
+        private IEnumerable<IMiddleware> _middleware;
+
+        private IDictionary<string, Type[]> _chatServiceConnectionMiddlewares;
+
         
-        public MiddlewarePipeline(SlackProvider slackProvider, IEnumerable<Middleware> middleware)
+        public MiddlewarePipeline(
+            ILogger<MiddlewarePipeline> logger,
+            IEnumerable<IChatServiceConnection> chatServiceConnections,
+            IEnumerable<IMiddleware> middleware,
+            IDictionary<string, Type[]> chatServiceConnectionMiddlewares)
         {
-            _slackProvider = slackProvider;
-            _slackProvider.NewMessage += NewMessage;
+            _logger = logger;
+            _chatServiceConnections = chatServiceConnections;
             _middleware = middleware;
+            _chatServiceConnectionMiddlewares = chatServiceConnectionMiddlewares;
+            foreach (var chatServiceConnection in _chatServiceConnections)
+            {
+                chatServiceConnection.NewMessage += NewMessage;
+            }
         }
 
-        private void NewMessage(object sender, MessageEventModel message)
+        private void NewMessage(object sender, ChatMessageModel message)
         {
-            foreach (var middleware in _middleware)
+            var chatServiceConnection = sender as IChatServiceConnection;
+            var middlewareTypes = _chatServiceConnectionMiddlewares[chatServiceConnection.Name];
+            foreach (var middlewareType in middlewareTypes)
             {
-                try 
+                var middlewareInstance = 
+                    _middleware.SingleOrDefault(m => middlewareType == m.GetType());
+                _logger.LogDebug(
+                    "Processing middleware {middleware} for chat service {chatservice}...",
+                    middlewareInstance.GetType().ToString(),
+                    chatServiceConnection.Name);
+                if (middlewareInstance != null)
                 {
-                    var result = middleware.ProcessMessage(message);
-                    if (result == MiddlewareResult.Stop)
+                    try
                     {
-                        break;
+                        var result = middlewareInstance.ProcessMessage(message);
+                        if (result == MiddlewareResult.Stop)
+                        {
+                            break;
+                        }
                     }
-                }
-                catch (Exception e)
-                {
-                    Console.Error.WriteLine($"Exception while executing {middleware.GetType().Name} middleware: {e.Message}");
+                    catch (Exception e)
+                    {
+                        _logger.LogError("Exception while executing '{middleware}':{exception}",
+                            middlewareType.ToString(),
+                            e.Message);
+                    }
                 }
             }
         }
