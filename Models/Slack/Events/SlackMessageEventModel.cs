@@ -54,7 +54,7 @@ namespace Theorem.Models.Slack.Events
                 Provider = ChatServiceKind.Slack,
                 ProviderInstance = chatServiceConnection.Name,
                 AuthorId = SlackUserId,
-                Body = Text,
+                Body = text,
                 ChannelId = SlackChannelId,
                 TimeSent = DateTimeOffset.FromUnixTimeSeconds(
                     long.Parse(SlackTimeSent.Split(".")[0])),
@@ -63,7 +63,7 @@ namespace Theorem.Models.Slack.Events
                 IsFromTheorem = (SlackUserId == chatServiceConnection.UserId),
                 // This logic may be a little too rudimentary to handle all edge cases,
                 // but it's fine for now:
-                IsMentioningTheorem = Text.Contains($"<@{chatServiceConnection.UserId}>"),
+                IsMentioningTheorem = isMention,
                 IsPrivateMessage = channelMemberCount == 2
             };
         }
