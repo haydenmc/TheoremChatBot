@@ -121,11 +121,7 @@ namespace Theorem.Middleware
 
             var printList = message.Body.Contains("ordered") ? _orderedMiddleware : 
                                 (message.Body.Contains("disabled") ? _disabledMiddleware :
-<<<<<<< HEAD
                                     _alphabeticallyOrderedMiddleware);
-=======
-                                _alphabeticallyOrderedMiddleware);
->>>>>>> address some PR comments
 
             serviceConnection
                 .SendMessageToChannelIdAsync(

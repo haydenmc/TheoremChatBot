@@ -11,11 +11,7 @@ namespace Theorem.Utility
         /// <summary>
         /// Get static Summon Verb value for ISummonable type
         /// </summary>
-<<<<<<< HEAD
         public static string GetSummonVerb(this Type t)
-=======
-		public static string GetSummonVerb(this Type t)
->>>>>>> address some PR comments
         {
             if (!typeof(ISummonable).IsAssignableFrom(t))
             {
@@ -29,11 +25,7 @@ namespace Theorem.Utility
         /// <summary>
         /// Get static Summon Verb value for ISummonable object
         /// </summary>
-<<<<<<< HEAD
         public static string GetSummonVerb(this ISummonable o)
-=======
-		public static string GetSummonVerb(this ISummonable o)
->>>>>>> address some PR comments
         {
             return o.GetType().GetSummonVerb();
         }

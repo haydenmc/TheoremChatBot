@@ -10,11 +10,7 @@ namespace Theorem.Utility
         /// <summary>
         /// Enables string formatting by named properties in injection object
         /// </summary>
-<<<<<<< HEAD
         public static string Inject(this string formatString, object injectionObject)
-=======
-		public static string Inject(this string formatString, object injectionObject)
->>>>>>> address some PR comments
         {
             return formatString.Inject(GetPropertyHash(injectionObject));
         }
@@ -34,13 +30,9 @@ namespace Theorem.Utility
         {
             string result = formatString;
             if (attributes == null || formatString == null)
-<<<<<<< HEAD
             {
                 return result;
             }
-=======
-                return result;
->>>>>>> address some PR comments
 
             foreach (string attributeKey in attributes.Keys)
             {
@@ -55,7 +47,6 @@ namespace Theorem.Utility
         public static string InjectSingleValue(this string formatString, string key, object replacementValue)
         {
             string result = formatString;
-<<<<<<< HEAD
             // regex replacement of key with value, where the generic key format is:
             // Regex foo = new Regex("{(foo)(?:}|(?::(.[^}]*)}))");
             Regex attributeRegex = new Regex("{(" + key + ")(?:}|(?::(.[^}]*)}))");  
@@ -63,24 +54,19 @@ namespace Theorem.Utility
 
             // loop through matches, since each key may be used more than once 
             // (and with a different format string)
-=======
-            //regex replacement of key with value, where the generic key format is:
-            //Regex foo = new Regex("{(foo)(?:}|(?::(.[^}]*)}))");
-            Regex attributeRegex = new Regex("{(" + key + ")(?:}|(?::(.[^}]*)}))");  //for key = foo, matches {foo} and {foo:SomeFormat}
-
-            //loop through matches, since each key may be used more than once (and with a different format string)
->>>>>>> address some PR comments
             foreach (Match m in attributeRegex.Matches(formatString))
             {
                 string replacement = m.ToString();
                 if (m.Groups[2].Length > 0) //matched {foo:SomeFormat}
                 {
-<<<<<<< HEAD
                     // do a double string.Format - first to build the proper format string, 
                     // and then to format the replacement value
                     string attributeFormatString = string.Format(CultureInfo.InvariantCulture, 
-                                                                 "{{0:{0}}}", m.Groups[2]);
-                    replacement = string.Format(CultureInfo.CurrentCulture, attributeFormatString, replacementValue);
+                                                                 "{{0:{0}}}", 
+                                                                 m.Groups[2]);
+                    replacement = string.Format(CultureInfo.CurrentCulture, 
+                                                attributeFormatString, 
+                                                replacementValue);
                 }
                 else // matched {foo}
                 {
@@ -89,18 +75,6 @@ namespace Theorem.Utility
                 // perform replacements, one match at a time
                 result = result.Replace(m.ToString(), replacement); 
                 // attributeRegex.Replace(result, replacement, 1);
-=======
-                    //do a double string.Format - first to build the proper format string, and then to format the replacement value
-                    string attributeFormatString = string.Format(CultureInfo.InvariantCulture, "{{0:{0}}}", m.Groups[2]);
-                    replacement = string.Format(CultureInfo.CurrentCulture, attributeFormatString, replacementValue);
-                }
-                else //matched {foo}
-                {
-                    replacement = (replacementValue ?? string.Empty).ToString();
-                }
-                //perform replacements, one match at a time
-                result = result.Replace(m.ToString(), replacement);  //attributeRegex.Replace(result, replacement, 1);
->>>>>>> address some PR comments
             }
             return result;
 
