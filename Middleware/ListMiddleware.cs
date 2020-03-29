@@ -85,7 +85,8 @@ namespace Theorem.Middleware
 
             var serviceConnection = message.FromChatServiceConnection;
 
-            var verbList = string.Join('\n',_middlewareVerbs.ToList().Select(kvp => kvp.Key + " -> " + kvp.Value));
+            var verbList = string.Join('\n',_middlewareVerbs.ToList()
+                .Select(kvp => kvp.Key + " -> " + kvp.Value));
 
             serviceConnection
                 .SendMessageToChannelIdAsync(

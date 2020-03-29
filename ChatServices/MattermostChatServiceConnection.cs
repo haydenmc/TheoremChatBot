@@ -491,7 +491,8 @@ namespace Theorem.ChatServices
 
         public async Task<int> GetMemberCountFromChannelIdAsync(string channelId)
         {
-            // note: this currently only counts users from the first page of results, since this is sufficient for our current use cases
+            // note: this currently only counts users from the first page of results, 
+            // since this is sufficient for our current use cases
             using (var httpClient = getHttpClient())
             {
                 var result = await httpClient.GetAsync($"api/v4/channels/{channelId}/members");

@@ -26,7 +26,8 @@ namespace Theorem.Models.Slack.Events
         {
             // if we receive a message in a channel with only one other member, we assume it's a private message
             // TODO: figure out better way to detect private messages
-            var getChannelMemberCountTask = chatServiceConnection.GetMemberCountFromChannelIdAsync(SlackChannelId);
+            var getChannelMemberCountTask = 
+                chatServiceConnection.GetMemberCountFromChannelIdAsync(SlackChannelId);
             getChannelMemberCountTask.Wait();
             var channelMemberCount = getChannelMemberCountTask.Result;
 
@@ -53,7 +54,7 @@ namespace Theorem.Models.Slack.Events
                 Provider = ChatServiceKind.Slack,
                 ProviderInstance = chatServiceConnection.Name,
                 AuthorId = SlackUserId,
-                Body = text,
+                Body = Text,
                 ChannelId = SlackChannelId,
                 TimeSent = DateTimeOffset.FromUnixTimeSeconds(
                     long.Parse(SlackTimeSent.Split(".")[0])),
@@ -62,8 +63,7 @@ namespace Theorem.Models.Slack.Events
                 IsFromTheorem = (SlackUserId == chatServiceConnection.UserId),
                 // This logic may be a little too rudimentary to handle all edge cases,
                 // but it's fine for now:
-                IsMentioningTheorem = isMention,
-                IsPrivateMessage = channelMemberCount == 2
+                IsMentioningTheorem = Text.Contains($"<@{chatServiceConnection.UserId}>")
             };
         }
     }

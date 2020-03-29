@@ -35,7 +35,9 @@ namespace Theorem.Middleware
             }
         }
 
-        private string ProcessSummonMessage(ISummonable middleware, IChatServiceConnection chatServiceConnection, ChatMessageModel message)
+        private string ProcessSummonMessage(ISummonable middleware, 
+                                            IChatServiceConnection chatServiceConnection, 
+                                            ChatMessageModel message)
         {
             // expect exactly 1 instance of the action verb
             var verbMatchPattern = string.Concat(middleware.GetSummonVerb(), "{1}\\s?(");
@@ -51,10 +53,13 @@ namespace Theorem.Middleware
             }
 
             var strippedMessageMatchGroup = match.Groups[1];
-            return strippedMessageMatchGroup.Value == null ? string.Empty : strippedMessageMatchGroup.Value;
+            return strippedMessageMatchGroup.Value == null ? string.Empty 
+                                                           : strippedMessageMatchGroup.Value;
         }
 
-        private bool TestHelpMessage(ISummonable middleware, IChatServiceConnection chatServiceConnection, ChatMessageModel message)
+        private bool TestHelpMessage(ISummonable middleware, 
+                                     IChatServiceConnection chatServiceConnection, 
+                                     ChatMessageModel message)
         {
             // expect exactly 1 instance of the action verb
             var helpMatchPattern = string.Concat(middleware.GetSummonVerb(), "{1}\\s?help\\s*");
@@ -85,17 +90,23 @@ namespace Theorem.Middleware
                         // if this is a summonable middleware, process the summon message first
                         if (middlewareInstance is ISummonable)
                         {
-                            if(this.TestHelpMessage((ISummonable)middlewareInstance, chatServiceConnection, message))
+                            if(this.TestHelpMessage((ISummonable)middlewareInstance, 
+                                                    chatServiceConnection, 
+                                                    message))
                             {
                                 chatServiceConnection.SendMessageToChannelIdAsync(
                                     message.ChannelId, 
                                     ((ISummonable)middlewareInstance).Usage)
                                     .Wait();
-                                // halt pipeline execution after matching with middleware and displaying usage info
+                                // halt pipeline execution after matching with middleware 
+                                // and displaying usage info
                                 break;
                             }
 
-                            var processedMessage = this.ProcessSummonMessage((ISummonable)middlewareInstance, chatServiceConnection, message);
+                            var processedMessage = 
+                                this.ProcessSummonMessage((ISummonable)middlewareInstance, 
+                                                          chatServiceConnection, 
+                                                          message);
 
                             if (processedMessage == null)
                             {

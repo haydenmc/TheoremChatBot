@@ -82,14 +82,14 @@ namespace Theorem.Middleware
             //   2. enabled MW that was not explicitly ordered
             //   3. potentially enabled, but unconfigured MW
 
-            IEnumerable<string> orderedMiddlewareNamesList = new List<string>();
-            orderedMiddlewareNamesList = orderedMiddlewareNamesList.Concat(
+            List<string> orderedMiddlewareNamesList = new List<string>();
+            orderedMiddlewareNamesList.AddRange(
                 orderedMiddlewareList.OrderBy(mw => mw.ExecutionOrderNumber).Select(mw => mw.Name)
             );
-            orderedMiddlewareNamesList = orderedMiddlewareNamesList.Concat(
+            orderedMiddlewareNamesList.AddRange(
                 unorderedMiddlewareList.Select(mw => mw.Name)
             );
-            orderedMiddlewareNamesList = orderedMiddlewareNamesList.Concat(
+            orderedMiddlewareNamesList.AddRange(
                 unconfiguredMiddlewareList.Select(mw => mw.Name)
             );
 
@@ -121,7 +121,7 @@ namespace Theorem.Middleware
 
             var printList = message.Body.Contains("ordered") ? _orderedMiddleware : 
                                 (message.Body.Contains("disabled") ? _disabledMiddleware :
-                                _alphabeticallyOrderedMiddleware);
+                                    _alphabeticallyOrderedMiddleware);
 
             serviceConnection
                 .SendMessageToChannelIdAsync(

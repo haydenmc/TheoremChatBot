@@ -10,7 +10,6 @@ using Microsoft.Extensions.Logging;
 using Theorem.ChatServices;
 using Theorem.Middleware;
 using Theorem.Models;
-using Theorem.Providers;
 using Theorem.Utility;
 
 namespace Theorem
@@ -146,7 +145,6 @@ namespace Theorem
             _logger.LogInformation("Reading middleware configuration...");
             var middlewareConfigRoot = Configuration.GetSection("Middleware");
             var middlewareConfigs = middlewareConfigRoot.GetChildren();
-            var middlewareMetadata = new List<MiddlewareMetadataModel>();
             foreach (var middlewareType in middlewareTypes)
             {
                 var typeConfig = middlewareConfigs
@@ -156,13 +154,6 @@ namespace Theorem
                     _logger.LogInformation(
                         "Configuration not found for middleware {name}. Skipping...",
                         middlewareType.Key);
-                    middlewareMetadata.Add(new MiddlewareMetadataModel() 
-                        {
-                            Name = middlewareType.Key,
-                            Enabled = false,
-                            Configured = false,
-                            ExecutionOrderNumber = 0
-                        });
                     continue;
                 }
                 if (!typeConfig.GetValue<bool>("Enabled", false))
@@ -170,13 +161,6 @@ namespace Theorem
                     _logger.LogInformation(
                         "{name} configuration 'Enabled' property not true. Skipping...",
                         middlewareType.Key);
-                    middlewareMetadata.Add(new MiddlewareMetadataModel() 
-                        {
-                            Name = middlewareType.Key,
-                            Enabled = false,
-                            Configured = true,
-                            ExecutionOrderNumber = getExecutionOrderNumber(typeConfig)
-                        });
                     continue;
                 }
                 _logger.LogDebug("Registering middleware type {type}...",
@@ -187,22 +171,7 @@ namespace Theorem
                         new TypedParameter(typeof(ConfigurationSection), typeConfig))
                     .As<IMiddleware>()
                     .SingleInstance();
-                
-                var isSummonable = typeof(ISummonable).IsAssignableFrom(middlewareType.Value);
-                middlewareMetadata.Add(new MiddlewareMetadataModel() 
-                    {
-                        Name = middlewareType.Key,
-                        Enabled = true,
-                        Configured = true,
-                        ExecutionOrderNumber = getExecutionOrderNumber(typeConfig),
-                        IsSummonable = isSummonable,
-                        SummonVerb = isSummonable ? middlewareType.Value.GetSummonVerb() : string.Empty
-                    });
             }
-
-            // Register BotMetadataProvider instance
-            var botInfoProvider = new BotMetadataProvider(middlewareMetadata);
-            containerBuilder.RegisterInstance(botInfoProvider);
         }
 
         private void registerChatServiceConnections(ContainerBuilder containerBuilder)
@@ -312,6 +281,14 @@ namespace Theorem
             int i;
             return int.TryParse(c.GetChildren().Where(c2 => c2.Key.Equals("ExecutionOrder"))
                 .SingleOrDefault()?.Value, out i) ? i : 0;
+        }
+
+        private static bool getEnabledValue(IConfigurationSection c)
+        {
+            // return true by default -> middleware has to be explicitly disabled to not be loaded
+            bool b;
+            return bool.TryParse(c.GetChildren().Where(c2 => c2.Key.Equals("Enabled"))
+                .SingleOrDefault()?.Value, out b) ? b : true;
         }
     }
 }

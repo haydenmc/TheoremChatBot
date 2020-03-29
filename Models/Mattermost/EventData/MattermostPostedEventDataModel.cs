@@ -95,7 +95,8 @@ namespace Theorem.Models.Mattermost.EventData
         {
             // if we receive a message in a channel with only one other member, we assume it's a private message
             // TODO: figure out better way to detect private messages
-            var getChannelMemberCountTask = chatServiceConnection.GetMemberCountFromChannelIdAsync(Post.ChannelId);
+            var getChannelMemberCountTask = 
+                chatServiceConnection.GetMemberCountFromChannelIdAsync(Post.ChannelId);
             getChannelMemberCountTask.Wait();
             var channelMemberCount = getChannelMemberCountTask.Result;
 
@@ -114,8 +115,7 @@ namespace Theorem.Models.Mattermost.EventData
                 IsMentioningTheorem = 
                     ((Mentions == null) ?
                         false :
-                        Mentions.Contains(chatServiceConnection.UserId)),
-                IsPrivateMessage = channelMemberCount == 2
+                        Mentions.Contains(chatServiceConnection.UserId))
             };
         }
     }
