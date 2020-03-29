@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Theorem.ChatServices;
 using Theorem.Middleware;
 using Theorem.Models;
+using Theorem.Providers;
 using Theorem.Utility;
 
 namespace Theorem
@@ -145,24 +146,46 @@ namespace Theorem
             _logger.LogInformation("Reading middleware configuration...");
             var middlewareConfigRoot = Configuration.GetSection("Middleware");
             var middlewareConfigs = middlewareConfigRoot.GetChildren();
+            var middlewareMetadata = new List<MiddlewareMetadataModel>();
             foreach (var middlewareType in middlewareTypes)
             {
                 var typeConfig = middlewareConfigs
                     .SingleOrDefault(c => c.Key == middlewareType.Key);
+
+                var isSummonable = typeof(ISummonable).IsAssignableFrom(middlewareType.Value);
+                var metadata = new MiddlewareMetadataModel() 
+                    {
+                        Name = middlewareType.Key,
+                        Enabled = false,
+                        Configured = false,
+                        ExecutionOrderNumber = getExecutionOrderNumber(typeConfig),
+                        IsSummonable = isSummonable,
+                        SummonVerb = isSummonable ? middlewareType.Value.GetSummonVerb() : string.Empty
+                    };
+
                 if (typeConfig == null)
                 {
                     _logger.LogInformation(
                         "Configuration not found for middleware {name}. Skipping...",
                         middlewareType.Key);
+                    middlewareMetadata.Add(metadata);
                     continue;
                 }
+
+                metadata.Configured = true;
+
                 if (!typeConfig.GetValue<bool>("Enabled", false))
                 {
                     _logger.LogInformation(
                         "{name} configuration 'Enabled' property not true. Skipping...",
                         middlewareType.Key);
+                    middlewareMetadata.Add(metadata);
                     continue;
                 }
+
+                metadata.Enabled = true;
+                middlewareMetadata.Add(metadata);
+
                 _logger.LogDebug("Registering middleware type {type}...",
                     middlewareType.Value.ToString());
                 containerBuilder
@@ -172,6 +195,10 @@ namespace Theorem
                     .As<IMiddleware>()
                     .SingleInstance();
             }
+
+            // Register BotMetadataProvider instance
+            var botInfoProvider = new BotMetadataProvider(middlewareMetadata);
+            containerBuilder.RegisterInstance(botInfoProvider);
         }
 
         private void registerChatServiceConnections(ContainerBuilder containerBuilder)
@@ -279,7 +306,7 @@ namespace Theorem
         private static int getExecutionOrderNumber(IConfigurationSection c)
         {
             int i;
-            return int.TryParse(c.GetChildren().Where(c2 => c2.Key.Equals("ExecutionOrder"))
+            return int.TryParse(c?.GetChildren().Where(c2 => c2.Key.Equals("ExecutionOrder"))
                 .SingleOrDefault()?.Value, out i) ? i : 0;
         }
 

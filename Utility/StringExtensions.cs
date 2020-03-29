@@ -62,8 +62,11 @@ namespace Theorem.Utility
                     // do a double string.Format - first to build the proper format string, 
                     // and then to format the replacement value
                     string attributeFormatString = string.Format(CultureInfo.InvariantCulture, 
-                                                                 "{{0:{0}}}", m.Groups[2]);
-                    replacement = string.Format(CultureInfo.CurrentCulture, attributeFormatString, replacementValue);
+                                                                 "{{0:{0}}}", 
+                                                                 m.Groups[2]);
+                    replacement = string.Format(CultureInfo.CurrentCulture, 
+                                                attributeFormatString, 
+                                                replacementValue);
                 }
                 else // matched {foo}
                 {
