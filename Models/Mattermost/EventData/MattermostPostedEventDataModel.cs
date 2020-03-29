@@ -93,6 +93,13 @@ namespace Theorem.Models.Mattermost.EventData
 
         public ChatMessageModel ToChatMessageModel(IChatServiceConnection chatServiceConnection)
         {
+            // if we receive a message in a channel with only one other member, we assume it's a private message
+            // TODO: figure out better way to detect private messages
+            var getChannelMemberCountTask = 
+                chatServiceConnection.GetMemberCountFromChannelIdAsync(Post.ChannelId);
+            getChannelMemberCountTask.Wait();
+            var channelMemberCount = getChannelMemberCountTask.Result;
+
             return new ChatMessageModel()
             {
                 Id = Post.Id,

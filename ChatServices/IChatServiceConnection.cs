@@ -11,6 +11,8 @@ namespace Theorem.ChatServices
 
         string UserId { get; }
 
+        string UserName { get; }
+
         ObservableCollection<UserModel> Users { get; }
 
         ObservableCollection<UserModel> OnlineUsers { get; }
@@ -24,6 +26,8 @@ namespace Theorem.ChatServices
         Task SendMessageToChannelIdAsync(string channelId, string body);
 
         Task<string> GetChannelIdFromChannelNameAsync(string channelName);
+
+        Task<int> GetMemberCountFromChannelIdAsync(string channelId);
 
         Task SetChannelTopicAsync(string channelId, string topic);
     }

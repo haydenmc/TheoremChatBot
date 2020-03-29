@@ -336,6 +336,17 @@ namespace Theorem.ChatServices
         }
 
         /// <summary>
+        /// User name of the bot in this service
+        /// </summary>
+        public string UserName
+        {
+            get
+            {
+                return this._username;
+            }
+        }
+
+        /// <summary>
         /// Collection of users present on this chat service connection
         /// </summary>
         public ObservableCollection<UserModel> Users { get; private set; }
@@ -518,6 +529,12 @@ namespace Theorem.ChatServices
         public async Task SetChannelTopicAsync(string channelId, string topic)
         {
             // TODO
+        }
+
+        public async Task<int> GetMemberCountFromChannelIdAsync(string channelId)
+        {
+            // TODO
+            return 0;
         }
     }
 }

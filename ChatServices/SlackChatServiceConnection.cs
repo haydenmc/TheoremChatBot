@@ -72,6 +72,17 @@ namespace Theorem.ChatServices
         }
 
         /// <summary>
+        /// User name of the bot in this service
+        /// </summary>
+        public string UserName
+        {
+            get
+            {
+                return Self.Name;
+            }
+        }
+
+        /// <summary>
         /// Collection of users present on this chat service connection
         /// </summary>
         // TODO: Not implemented
@@ -253,6 +264,27 @@ namespace Theorem.ChatServices
         public async Task SetChannelTopicAsync(string channelId, string topic)
         {
             // TODO
+        }
+
+        public async Task<int> GetMemberCountFromChannelIdAsync(string channelId)
+        {
+            using (var httpClient = new HttpClient())
+            {
+                httpClient.BaseAddress = new Uri(BaseApiUrl);
+                var postData = new FormUrlEncodedContent(new[] { 
+                    new KeyValuePair<string, string>("token", _apiToken), 
+                    new KeyValuePair<string, string>("channel", channelId), 
+                    new KeyValuePair<string, string>("include_num_members", "true")
+                }); 
+                var result = await httpClient.PostAsync("conversations.info", postData);
+
+                result.EnsureSuccessStatusCode();
+
+                var responseContent = await result.Content.ReadAsStringAsync();
+                var response = JsonConvert.DeserializeObject<SlackConversationInfoModel>(responseContent);
+
+                return response.Channel.MemberCount;
+            }
         }
     }
 }

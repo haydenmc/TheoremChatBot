@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Theorem.ChatServices;
 using Theorem.Models;
+using Theorem.Utility;
 
 namespace Theorem.Middleware
 {
@@ -33,6 +35,42 @@ namespace Theorem.Middleware
             }
         }
 
+        private string ProcessSummonMessage(ISummonable middleware, 
+                                            IChatServiceConnection chatServiceConnection, 
+                                            ChatMessageModel message)
+        {
+            // expect exactly 1 instance of the action verb
+            var verbMatchPattern = string.Concat(middleware.GetSummonVerb(), "{1}\\s?(");
+            // match for message format "<bot mention> <verb> *rest of message*" and return *rest of message* to middleware
+            var testPattern = string.Concat(verbMatchPattern, middleware.MentionRegex, ")");
+            Regex testRegex = new Regex(testPattern, RegexOptions.IgnoreCase);
+
+            Match match = testRegex.Match(message.Body);
+
+            if (!match.Success)
+            {
+                return null;
+            }
+
+            var strippedMessageMatchGroup = match.Groups[1];
+            return strippedMessageMatchGroup.Value == null ? string.Empty 
+                                                           : strippedMessageMatchGroup.Value;
+        }
+
+        private bool TestHelpMessage(ISummonable middleware, 
+                                     IChatServiceConnection chatServiceConnection, 
+                                     ChatMessageModel message)
+        {
+            // expect exactly 1 instance of the action verb
+            var helpMatchPattern = string.Concat(middleware.GetSummonVerb(), "{1}\\s?help\\s*");
+            // match for message format "<bot mention> <verb> *rest of message*" and return *rest of message* to middleware
+            Regex testRegex = new Regex(helpMatchPattern, RegexOptions.IgnoreCase);
+
+            Match match = testRegex.Match(message.Body);
+
+            return match.Success;
+        }
+
         private void NewMessage(object sender, ChatMessageModel message)
         {
             var chatServiceConnection = sender as IChatServiceConnection;
@@ -49,6 +87,39 @@ namespace Theorem.Middleware
                 {
                     try
                     {
+                        // if this is a summonable middleware, process the summon message first
+                        if (middlewareInstance is ISummonable)
+                        {
+                            if(this.TestHelpMessage((ISummonable)middlewareInstance, 
+                                                    chatServiceConnection, 
+                                                    message))
+                            {
+                                chatServiceConnection.SendMessageToChannelIdAsync(
+                                    message.ChannelId, 
+                                    ((ISummonable)middlewareInstance).Usage)
+                                    .Wait();
+                                // halt pipeline execution after matching with middleware 
+                                // and displaying usage info
+                                break;
+                            }
+
+                            var processedMessage = 
+                                this.ProcessSummonMessage((ISummonable)middlewareInstance, 
+                                                          chatServiceConnection, 
+                                                          message);
+
+                            if (processedMessage == null)
+                            {
+                                _logger.LogInformation(
+                                    "Unsuccessful summon match for {middleware} for chat service {chatservice}...",
+                                    middlewareInstance.GetType().ToString(),
+                                    chatServiceConnection.Name);
+                                continue;
+                            }
+
+                            message.Body = processedMessage;
+                        }
+                        
                         var result = middlewareInstance.ProcessMessage(message);
                         if (result == MiddlewareResult.Stop)
                         {
