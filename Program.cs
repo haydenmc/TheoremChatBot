@@ -306,7 +306,7 @@ namespace Theorem
         private static int getExecutionOrderNumber(IConfigurationSection c)
         {
             int i;
-            return int.TryParse(c.GetChildren().Where(c2 => c2.Key.Equals("ExecutionOrder"))
+            return int.TryParse(c?.GetChildren().Where(c2 => c2.Key.Equals("ExecutionOrder"))
                 .SingleOrDefault()?.Value, out i) ? i : 0;
         }
 
