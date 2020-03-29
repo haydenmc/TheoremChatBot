@@ -53,7 +53,7 @@ namespace Theorem.Utility
             // for key = foo, matches {foo} and {foo:SomeFormat}
 
             // loop through matches, since each key may be used more than once 
-			// (and with a different format string)
+            // (and with a different format string)
             foreach (Match m in attributeRegex.Matches(formatString))
             {
                 string replacement = m.ToString();
