@@ -33,7 +33,7 @@ namespace Theorem.Models.Slack.Events
             var injectVariables = new {
                 userId = chatServiceConnection.UserId
             };
-            var rawTestPattern = string.Concat(chatServiceConnection.MentionMessageRegExPrefix, "(.*)");
+            var rawTestPattern = ".*<@{userId}>\\s(.*)";
             var mentionTestPattern = rawTestPattern.Inject(injectVariables);
             Regex mentionRegex = new Regex(mentionTestPattern);
 
