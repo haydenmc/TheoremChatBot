@@ -393,7 +393,10 @@ namespace Theorem.ChatServices
                         var onlineUserRef = Users.SingleOrDefault(u => u.Id == onlineUser.UserId);
                         if (onlineUserRef != null)
                         {
-                            OnlineUsers.Add(onlineUserRef);
+                            if(!OnlineUsers.Contains(onlineUserRef))
+                            {
+                                OnlineUsers.Add(onlineUserRef);
+                            }
                         }
                     }
                     _logger.LogInformation("Received Mattermost online user list - {count} users.",
