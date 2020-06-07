@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Security;
@@ -11,295 +12,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using MumbleProto;
-using MumbleSharp;
-using MumbleSharp.Audio;
-using MumbleSharp.Audio.Codecs;
-using MumbleSharp.Model;
+using ProtoBuf;
 using Theorem.Models;
+using Theorem.Models.Mumble;
+using Theorem.Models.Mumble.MumbleProto;
+using Version = Theorem.Models.Mumble.MumbleProto.Version;
 
 namespace Theorem.ChatServices
 {
-    public static class MumbleExtensions
-    {
-        public static UserModel ToUserModel(
-            this User user,
-            IChatServiceConnection chatServiceConnection)
-        {
-            return new UserModel()
-            {
-                Id = user.Id.ToString(),
-                Provider = ChatServiceKind.Mumble,
-                Name = user.Name,
-                DisplayName = user.Name,
-                FromChatServiceConnection = chatServiceConnection
-            };
-        }
-    }
-
-    public class TheoremMumbleProtocol :
-        IMumbleProtocol
-    {
-        public MumbleConnection Connection { get; private set; }
-
-        public User LocalUser { get; private set; }
-
-        public Channel RootChannel { get; private set; }
-
-        public IEnumerable<Channel> Channels 
-        {
-            get
-            {
-                return _channelDictionary.Values;
-            }
-        }
-
-        public EventHandler<User> UserAdded;
-
-        public EventHandler<User> UserRemoved;
-
-        private readonly ConcurrentDictionary<UInt32, Channel> _channelDictionary = 
-            new ConcurrentDictionary<UInt32, Channel>();
-
-        public IEnumerable<User> Users {
-            get
-            {
-                return _userDictionary.Values;
-            }
-        }
-        private readonly ConcurrentDictionary<UInt32, User> _userDictionary = 
-            new ConcurrentDictionary<UInt32, User>();
-
-        public bool ReceivedServerSync { get; private set; }
-
-        public SpeechCodecs TransmissionCodec
-        {
-            get
-            {
-                return SpeechCodecs.Opus;
-            }
-        }
-
-        public TheoremMumbleProtocol()
-        {
-
-        }
-
-        public void Initialise(MumbleConnection connection)
-        {
-            Connection = connection;
-        }
-
-        public void Acl(Acl acl)
-        { }
-
-        public void BanList(BanList banList)
-        { }
-
-        public void ChannelRemove(ChannelRemove channelRemove)
-        { }
-
-        public void ChannelState(ChannelState channelState)
-        { }
-
-        public void CodecVersion(CodecVersion codecVersion)
-        { }
-
-        public void ContextAction(ContextAction contextAction)
-        { }
-
-        public void EncodedVoice(byte[] packet, uint userSession, long sequence, IVoiceCodec codec, SpeechTarget target)
-        { }
-
-        public IVoiceCodec GetCodec(uint user, SpeechCodecs codec)
-        {
-            return null;
-        }
-
-        public void PermissionDenied(PermissionDenied permissionDenied)
-        { }
-
-        public void PermissionQuery(PermissionQuery permissionQuery)
-        { }
-
-        public void Ping(Ping ping)
-        { }
-
-        public void QueryUsers(QueryUsers queryUsers)
-        { }
-
-        public void Reject(Reject reject)
-        { }
-
-        public X509Certificate SelectCertificate(object sender, string targetHost, X509CertificateCollection localCertificates, X509Certificate remoteCertificate, string[] acceptableIssuers)
-        {
-            return null; // Something something security..?
-                         // Not my fault, original implementation does this ;)
-        }
-
-        public void SendVoice(ArraySegment<byte> pcm, SpeechTarget target, uint targetId)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void SendVoiceStop()
-        {
-            throw new NotImplementedException();
-        }
-
-        public void ServerConfig(ServerConfig serverConfig)
-        { }
-
-        public void ServerSync(ServerSync serverSync)
-        {
-            if (LocalUser != null)
-            {
-                throw new InvalidOperationException("Second ServerSync Received");
-            }
-
-            if (!serverSync.ShouldSerializeSession())
-            {
-                throw new InvalidOperationException(
-                    $"{nameof(ServerSync)} must provide a {nameof(serverSync.Session)}.");
-            }
-
-            //Get the local user
-            LocalUser = _userDictionary[serverSync.Session];
-
-            ReceivedServerSync = true;
-        }
-
-        public void SuggestConfig(SuggestConfig suggestedConfiguration)
-        { }
-
-        public void TextMessage(TextMessage textMessage)
-        { }
-
-        public void UdpPing(byte[] packet)
-        { }
-
-        public void UserList(UserList userList)
-        { }
-
-        /// <summary>
-        /// Used to communicate user leaving or being kicked.
-        /// Sent by the server when it informs the clients that a user is not present anymore.
-        /// </summary>
-        public void UserRemove(UserRemove userRemove)
-        {
-            User user;
-            if (_userDictionary.TryRemove(userRemove.Session, out user))
-            {
-                user.Channel = null;
-                onUserRemoved(user);
-            }
-
-            if (user != null && user.Equals(LocalUser))
-            {
-                Connection.Close();
-            }
-        }
-
-        /// <summary>
-        /// Sent by the server when it communicates new and changed users to client.
-        /// First seen during login procedure.
-        /// </summary>
-        public void UserState(UserState userState)
-        {
-            if (userState.ShouldSerializeSession())
-            {
-                User user;
-                if (_userDictionary.ContainsKey(userState.Session))
-                {
-                    user = _userDictionary[userState.Session];
-                }
-                else
-                {
-                    user = new User(this, userState.Session);
-                    _userDictionary[userState.Session] = user;
-                }
-
-                // Update user in the dictionary
-                if (userState.ShouldSerializeSelfDeaf())
-                {
-                    user.SelfDeaf = userState.SelfDeaf;
-                }
-                if (userState.ShouldSerializeSelfMute())
-                {
-                    user.SelfMuted = userState.SelfMute;
-                }
-                if (userState.ShouldSerializeMute())
-                {
-                    user.Muted = userState.Mute;
-                }
-                if (userState.ShouldSerializeDeaf())
-                {
-                    user.Deaf = userState.Deaf;
-                }
-                if (userState.ShouldSerializeSuppress())
-                {
-                    user.Suppress = userState.Suppress;
-                }
-                if (userState.ShouldSerializeName())
-                {
-                    user.Name = userState.Name;
-                }
-                if (userState.ShouldSerializeComment())
-                {
-                    user.Comment = userState.Comment;
-                }
-
-                // if (userState.ShouldSerializeChannelId())
-                // {
-                //     user.Channel = _channelDictionary[userState.ChannelId];
-                // }
-                // else if (user.Channel == null)
-                // {
-                //     user.Channel = RootChannel;
-                // }
-
-                //if (added)
-                onUserAdded(user);
-            }
-        }
-
-        public void UserStats(UserStats userStats)
-        { }
-
-        public bool ValidateCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors errors)
-        {
-            return true; // Something something security..?
-                         // Not my fault, original implementation does this ;)
-        }
-
-        public void Version(MumbleProto.Version version)
-        { }
-
-        /// <summary>
-        /// Used to raise the UserAdded event.
-        /// </summary>
-        protected virtual void onUserAdded(User user)
-        {
-            var eventHandler = UserAdded;
-            if (eventHandler != null)
-            {
-                eventHandler(this, user);
-            }
-        }
-
-        /// <summary>
-        /// Used to raise the UserRemoved event.
-        /// </summary>
-        protected virtual void onUserRemoved(User user)
-        {
-            var eventHandler = UserRemoved;
-            if (eventHandler != null)
-            {
-                eventHandler(this, user);
-            }
-        }
-    }
-
     public class MumbleChatServiceConnection :
         IChatServiceConnection
     {
@@ -342,7 +62,7 @@ namespace Theorem.ChatServices
         {
             get
             {
-                return this._username;
+                return _username;
             }
         }
 
@@ -362,6 +82,11 @@ namespace Theorem.ChatServices
                 return Users;
             }
         }
+
+        /// <summary>
+        /// Whether or not we are currently connected to the chat service
+        /// </summary>
+        public bool IsConnected { get; private set; } = false;
 
         /// <summary>
         /// Hostname of the server to connect to defined by configuration values
@@ -414,18 +139,52 @@ namespace Theorem.ChatServices
             }
         }
 
+        /// <summary>
+        /// Channel for Theorem to join
+        /// </summary>
+        private string _channelNameToJoin
+        {
+            get
+            {
+                return _configuration["Channel"];
+            }
+        }
+
+        private SslStream _sslStream;
+
+        private SemaphoreSlim _streamWriteSemaphor;
+
+        private Dictionary<uint, ChannelState> _mumbleChannels = new Dictionary<uint, ChannelState>();
+
+        private Dictionary<uint, UserState> _mumbleUsers = new Dictionary<uint, UserState>();
+
+        private uint _mumbleSessionId;
+
         public event EventHandler<EventArgs> Connected;
         public event EventHandler<ChatMessageModel> NewMessage;
 
         public async Task<string> GetChannelIdFromChannelNameAsync(string channelName)
         {
-            // TODO
-            return "";
+            var matchingChannel = 
+                _mumbleChannels.Values.SingleOrDefault(c => c.Name == channelName);
+            if (matchingChannel != null)
+            {
+                return matchingChannel.ChannelId.ToString();
+            }
+            else
+            {
+                return "";
+            }
         }
 
         public async Task SendMessageToChannelIdAsync(string channelId, string body)
         {
-            // TODO
+            var textMessage = new TextMessage
+            {
+                ChannelIds = new uint[]{ UInt32.Parse(channelId) },
+                Message = body
+            };
+            await sendAsync<TextMessage>(PacketType.TextMessage, textMessage);
         }
 
         /// <summary>
@@ -440,51 +199,307 @@ namespace Theorem.ChatServices
 
         public async Task StartAsync()
         {
+            // Connect
             _logger.LogInformation("Connecting to Mumble server {server}...",
                 _serverHostname);
 
-            TheoremMumbleProtocol protocol = new TheoremMumbleProtocol();
-            protocol.UserAdded += mumbleUserAdded;
-            protocol.UserRemoved += mumbleUserRemoved;
+            TcpClient tcpClient = new TcpClient();
+            await tcpClient.ConnectAsync(_serverHostname, (int)_serverPort);
+            NetworkStream networkStream = tcpClient.GetStream();
+            _sslStream = new SslStream(
+                networkStream,
+                false,
+                (object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors errors) => true,
+                (object sender, string targetHost, X509CertificateCollection localCertificates, X509Certificate remoteCertificate, string[] acceptableIssuers) => null);
+            await _sslStream.AuthenticateAsClientAsync(_serverHostname);
+            _streamWriteSemaphor = new SemaphoreSlim(1, 1);
 
-            IPAddress ipAddress = Dns
-                .GetHostAddresses(_serverHostname)
-                .First(a => a.AddressFamily == AddressFamily.InterNetwork);
-            MumbleConnection connection = 
-                new MumbleConnection(new IPEndPoint(ipAddress, (int)_serverPort), protocol);
-            connection.Connect(_username, _serverPassword, new string[0], _serverHostname);
+            // Send version
+            await sendAsync<Version>(
+                PacketType.Version,
+                new Version
+                {
+                    Release = "Theorem",
+                    version = (1 << 16) | (2 << 8) | (0 & 0xFF),
+                    Os = Environment.OSVersion.ToString(),
+                    OsVersion = Environment.OSVersion.VersionString
+                });
 
-            await Task.WhenAll(new Task[]
+            // Send auth
+            await sendAsync<Authenticate>(
+                PacketType.Authenticate,
+                new Authenticate
+                {
+                    Username = _username,
+                    Password = _serverPassword,
+                    Opus = false
+                });
+
+            // We need to send pings every so often, otherwise the server disconnects us
+            var pingTimer = new System.Threading.Timer(async (state) => await sendPingAsync(), null, 5000, 5000);
+
+            // Now just read incoming data forever
+            try
             {
-                mumbleUpdateLoop(connection),
-                waitForConnection(protocol)
-            });
+                await listenAsync();
+            }
+            finally
+            {
+                await pingTimer.DisposeAsync();
+            }
         }
 
-        private void mumbleUserRemoved(object sender, User e)
+        private async Task listenAsync()
         {
-            var existing = Users.SingleOrDefault(u => u.Id == e.Id.ToString());
-            if (existing != null)
+            byte[] packetTypeBuffer = new byte[2];
+            while (true)
             {
-                Users.Remove(existing);
+                int typeBytesRead = await _sslStream.ReadAsync(packetTypeBuffer, 0, 2);
+                if (typeBytesRead == 0)
+                {
+                    _logger.LogWarning("Connection closed by server.");
+                    break;
+                }
+                else if (typeBytesRead < 2)
+                {
+                    _logger.LogWarning("Couldn't read packet type.");
+                    continue;
+                }
+                PacketType type = (PacketType)IPAddress.NetworkToHostOrder(
+                    BitConverter.ToInt16(packetTypeBuffer));
+                switch (type)
+                {
+                    case PacketType.ChannelState:
+                        var channelState = 
+                            Serializer.DeserializeWithLengthPrefix<ChannelState>(
+                                _sslStream, PrefixStyle.Fixed32BigEndian);
+                        processChannelState(channelState);
+                        break;
+                    case PacketType.ChannelRemove:
+                        var channelRemove = 
+                            Serializer.DeserializeWithLengthPrefix<ChannelRemove>(
+                                _sslStream, PrefixStyle.Fixed32BigEndian);
+                        processChannelRemove(channelRemove);
+                        break;
+                    case PacketType.UserState:
+                        var userState = 
+                            Serializer.DeserializeWithLengthPrefix<UserState>(
+                                _sslStream, PrefixStyle.Fixed32BigEndian);
+                        processUserState(userState);
+                        break;
+                    case PacketType.UserRemove:
+                        var userRemove = 
+                            Serializer.DeserializeWithLengthPrefix<UserRemove>(
+                                _sslStream, PrefixStyle.Fixed32BigEndian);
+                        processUserRemove(userRemove);
+                        break;
+                    case PacketType.TextMessage:
+                        var textMessage = 
+                            Serializer.DeserializeWithLengthPrefix<TextMessage>(
+                                _sslStream, PrefixStyle.Fixed32BigEndian);
+                        processTextMessage(textMessage);
+                        break;
+                    case PacketType.ServerSync:
+                        // This indicates we are finally connected
+                        var serverSync =
+                            Serializer.DeserializeWithLengthPrefix<ServerSync>(
+                                _sslStream, PrefixStyle.Fixed32BigEndian);
+                        _mumbleSessionId = serverSync.Session;
+                        // Join the channel we want to be in
+                        await joinChannelAsync();
+                        IsConnected = true;
+                        onConnected();
+                        break;
+                    default:
+                        //_logger.LogDebug($"Packet type {type.ToString()} received");
+                        await processUnknownPayloadAsync();
+                        break;
+                }
             }
-            _logger.LogInformation("User removed: {id}: {name}",
-                existing.Id,
-                existing.Name);
+            IsConnected = false;
         }
 
-        private void mumbleUserAdded(object sender, User e)
+        private void processChannelState(ChannelState channelState)
         {
-            var existing = Users.SingleOrDefault(u => u.Id == e.Id.ToString());
-            if (existing != null)
+            if (!(_mumbleChannels.ContainsKey(channelState.ChannelId)))
             {
-                Users.Remove(existing);
+                _mumbleChannels[channelState.ChannelId] = channelState;
+                _logger.LogInformation($"Received new channel state for '{channelState.Name}'.");
             }
-            var newUserModel = e.ToUserModel(this);
-            _logger.LogInformation("New user: {id}: {name}",
-                newUserModel.Id,
-                newUserModel.Name);
-            Users.Add(newUserModel);
+            else
+            {
+                var cachedChannelState = _mumbleChannels[channelState.ChannelId];
+                if (channelState.ShouldSerializeName())
+                {
+                    cachedChannelState.Name = channelState.Name;
+                }
+                _logger.LogInformation($"Received updated channel state for " + 
+                    $"'{cachedChannelState.Name}'.");
+            }
+        }
+
+        private void processChannelRemove(ChannelRemove channelRemove)
+        {
+            if (!(_mumbleChannels.Remove(channelRemove.ChannelId)))
+            {
+                _logger.LogError($"Server requested removal of channel ID " + 
+                    $"'{channelRemove.ChannelId}' that does not exist in cache.");
+            }
+            else
+            {
+                _logger.LogInformation($"Received channel removal for ID " + 
+                    $"'{channelRemove.ChannelId}'.");
+            }
+        }
+
+        private void processUserState(UserState userState)
+        {
+            if (!(_mumbleUsers.ContainsKey(userState.Session)))
+            {
+                _mumbleUsers[userState.Session] = userState;
+                _logger.LogInformation($"Received new user state for '{userState.Name}'.");
+                this.Users.Add(new UserModel
+                {
+                    FromChatServiceConnection = this,
+                    Id = userState.Session.ToString(),
+                    DisplayName = userState.Name,
+                    Name = userState.Name,
+                    Provider = ChatServiceKind.Mumble,
+                });
+            }
+            else
+            {
+                var cachedUserState = _mumbleUsers[userState.Session];
+                var cachedUserModel = 
+                    Users.SingleOrDefault(u => u.Id == userState.Session.ToString());
+                if (userState.ShouldSerializeName())
+                {
+                    cachedUserState.Name = userState.Name;
+                    cachedUserModel.Name = userState.Name;
+                }
+                if (userState.ShouldSerializeChannelId())
+                {
+                    cachedUserState.ChannelId = userState.ChannelId;
+                }
+                _logger.LogInformation($"Received updated user state for '{cachedUserState.Name}'.");
+            }
+        }
+
+        private void processUserRemove(UserRemove userRemove)
+        {
+            if (!(_mumbleUsers.Remove(userRemove.Session)))
+            {
+                _logger.LogError($"Server requested removal of user session ID " + 
+                    $"'{userRemove.Session}' that does not exist in cache.");
+            }
+            else
+            {
+                _logger.LogInformation($"Received user removal for session ID " + 
+                    $"'{userRemove.Session}'.");
+            }
+            var cachedUserModel = Users.SingleOrDefault(u => u.Id == userRemove.Session.ToString());
+            if (cachedUserModel != null)
+            {
+                Users.Remove(cachedUserModel);
+            }
+        }
+
+        private void processTextMessage(TextMessage textMessage)
+        {
+            foreach (var channel in textMessage.ChannelIds)
+            {
+                var message = new ChatMessageModel
+                {
+                    FromChatServiceConnection = this,
+                    Id = "",
+                    AuthorId = textMessage.Actor.ToString(),
+                    Body = textMessage.Message,
+                    ChannelId = channel.ToString(),
+                    Provider = ChatServiceKind.Mumble,
+                    ProviderInstance = Name,
+                    TimeSent = DateTimeOffset.Now,
+                    IsFromTheorem = (textMessage.Actor == _mumbleSessionId)
+                };
+                onNewMessage(message);
+            }
+        }
+
+        private async Task joinChannelAsync()
+        {
+            if (_channelNameToJoin.Length <= 0)
+            {
+                _logger.LogInformation("No starting channel was specified to join.");
+                return;
+            }
+            var targetChannel = _mumbleChannels.Values.Single(c => c.Name == _channelNameToJoin);
+            if (targetChannel != null)
+            {
+                var userState = new UserState()
+                {
+                    ChannelId = targetChannel.ChannelId
+                };
+                await sendAsync<UserState>(PacketType.UserState, userState);
+            }
+            else
+            {
+                _logger.LogError($"Could not find channel '{_channelNameToJoin}' " + 
+                    $"when attempting to join.");
+            }
+        }
+
+        private async Task processUnknownPayloadAsync()
+        {
+            int payloadLength;
+            if (Serializer.TryReadLengthPrefix(
+                _sslStream,
+                PrefixStyle.Fixed32BigEndian,
+                out payloadLength))
+            {
+                if (payloadLength > 0)
+                {
+                    // read out those bytes
+                    byte[] readBuf = new byte[8];
+                    int bytesRead = 0;
+                    while (bytesRead < payloadLength)
+                    {
+                        bytesRead += await _sslStream.ReadAsync(
+                            readBuf,
+                            0,
+                            Math.Min(readBuf.Length, (payloadLength - bytesRead)));
+                    }
+                    //_logger.LogDebug($"Read {bytesRead} bytes.");
+                }
+                else
+                {
+                    _logger.LogWarning($"Invalid payload length.");
+                }
+            }
+            else
+            {
+                _logger.LogError($"Could not read payload.");
+            }
+        }
+
+        private async Task sendPingAsync()
+        {
+            await sendAsync<Ping>(PacketType.Ping, new Ping());
+        }
+
+        private async Task sendAsync<T>(PacketType type, T packet)
+        {
+            await _streamWriteSemaphor.WaitAsync();
+            try
+            {
+                byte[] packetTypeBytes = 
+                    BitConverter.GetBytes(IPAddress.HostToNetworkOrder((short)type));
+                await _sslStream.WriteAsync(packetTypeBytes, 0, packetTypeBytes.Length);
+                Serializer.SerializeWithLengthPrefix<T>(_sslStream, packet, PrefixStyle.Fixed32BigEndian);
+                await _sslStream.FlushAsync();
+            }
+            finally
+            {
+                _streamWriteSemaphor.Release();
+            }
         }
 
         /// <summary>
@@ -498,32 +513,18 @@ namespace Theorem.ChatServices
                 eventHandler(this, EventArgs.Empty);
             }
         }
-
-        private async Task waitForConnection(IMumbleProtocol protocol)
+        
+        /// <summary>
+        /// Used to raise the NewMessage event.
+        /// </summary>
+        /// <param name="message">Event arguments; the message that was received</param>
+        protected virtual void onNewMessage(ChatMessageModel message)
         {
-            await Task.Run(() => {
-                while (!protocol.ReceivedServerSync)
-                { }
-                _logger.LogInformation("{name} Mumble connection established", Name);
-                onConnected();
-            });
-        }
-
-        private async Task mumbleUpdateLoop(MumbleConnection connection)
-        {
-            await Task.Run(() => {
-                while (connection.State != ConnectionStates.Disconnected)
-                {
-                    if (connection.Process())
-                    {
-                        Thread.Yield();
-                    }
-                    else
-                    {
-                        Thread.Sleep(1);
-                    }
-                }
-            });
+            var eventHandler = NewMessage;
+            if (eventHandler != null)
+            {
+                eventHandler(this, message);
+            }
         }
 
         public async Task SetChannelTopicAsync(string channelId, string topic)

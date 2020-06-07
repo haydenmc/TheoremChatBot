@@ -86,6 +86,11 @@ namespace Theorem.ChatServices
             = new ObservableCollection<UserModel>();
 
         /// <summary>
+        /// Whether or not we are currently connected to the chat service
+        /// </summary>
+        public bool IsConnected { get; private set; } = false;
+
+        /// <summary>
         /// URL of the server to connect to defined by configuration values
         /// </summary>
         private string _serverHostname
@@ -252,6 +257,7 @@ namespace Theorem.ChatServices
                             _messageDeserializationSettings);
                 handleMessage(message);
             }
+            IsConnected = false;
         }
 
         private void handleMessage(
@@ -262,6 +268,7 @@ namespace Theorem.ChatServices
             {
                 _logger.LogDebug("Received 'hello' message. Our user ID is '{userid}'.",
                     message.Broadcast.UserId);
+                IsConnected = true;
                 onConnected();
             }
             else if (messageType == typeof(MattermostPostedEventDataModel))

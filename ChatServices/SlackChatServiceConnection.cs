@@ -95,6 +95,11 @@ namespace Theorem.ChatServices
         // TODO: Not implemented
         public ObservableCollection<UserModel> OnlineUsers { get; private set; }
             = new ObservableCollection<UserModel>();
+
+        /// <summary>
+        /// Whether or not we are currently connected to the chat service
+        /// </summary>
+        public bool IsConnected { get; private set; } = false;
         
         /// <summary>
         /// Settings used to deserialize incoming events into the proper types.
@@ -169,6 +174,7 @@ namespace Theorem.ChatServices
         /// <param name="webSocketClient">The web socket client object receiving from</param>
         private async Task receive(ClientWebSocket webSocketClient)
         {
+            IsConnected = true;
             onConnected();
             while (webSocketClient.State == WebSocketState.Open)
             {
@@ -192,6 +198,7 @@ namespace Theorem.ChatServices
                     _messageDeserializationSettings);
                 handleSlackEvent(slackEvent);
             }
+            IsConnected = false;
         }
 
         /// <summary>
