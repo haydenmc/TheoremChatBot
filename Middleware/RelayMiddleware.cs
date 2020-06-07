@@ -190,9 +190,11 @@ namespace Theorem.Middleware
         {
             if (!(message.IsFromTheorem))
             {
-                // Is this from a service that we relay messages from?
-                var matchingRelays = _relays
-                    .Where(r => r.RelayChat && (r.FromChatService == message.FromChatServiceConnection));
+                // Is this from a service/channel that we relay messages from?
+                var matchingRelays = _relays.Where(r => 
+                    r.RelayChat && 
+                    (r.FromChatService == message.FromChatServiceConnection) &&
+                    (r.FromChannelId == message.ChannelId));
                 foreach (var relay in matchingRelays)
                 {
                     // replay this message to the destination
