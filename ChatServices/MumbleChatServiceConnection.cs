@@ -62,7 +62,7 @@ namespace Theorem.ChatServices
         {
             get
             {
-                return this._username;
+                return _username;
             }
         }
 
@@ -82,6 +82,11 @@ namespace Theorem.ChatServices
                 return Users;
             }
         }
+
+        /// <summary>
+        /// Whether or not we are currently connected to the chat service
+        /// </summary>
+        public bool IsConnected { get; private set; } = false;
 
         /// <summary>
         /// Hostname of the server to connect to defined by configuration values
@@ -134,22 +139,52 @@ namespace Theorem.ChatServices
             }
         }
 
+        /// <summary>
+        /// Channel for Theorem to join
+        /// </summary>
+        private string _channelNameToJoin
+        {
+            get
+            {
+                return _configuration["Channel"];
+            }
+        }
+
         private SslStream _sslStream;
 
         private SemaphoreSlim _streamWriteSemaphor;
+
+        private Dictionary<uint, ChannelState> _mumbleChannels = new Dictionary<uint, ChannelState>();
+
+        private Dictionary<uint, UserState> _mumbleUsers = new Dictionary<uint, UserState>();
+
+        private uint _mumbleSessionId;
 
         public event EventHandler<EventArgs> Connected;
         public event EventHandler<ChatMessageModel> NewMessage;
 
         public async Task<string> GetChannelIdFromChannelNameAsync(string channelName)
         {
-            // TODO
-            return "";
+            var matchingChannel = 
+                _mumbleChannels.Values.SingleOrDefault(c => c.Name == channelName);
+            if (matchingChannel != null)
+            {
+                return matchingChannel.ChannelId.ToString();
+            }
+            else
+            {
+                return "";
+            }
         }
 
         public async Task SendMessageToChannelIdAsync(string channelId, string body)
         {
-            // TODO
+            var textMessage = new TextMessage
+            {
+                ChannelIds = new uint[]{ UInt32.Parse(channelId) },
+                Message = body
+            };
+            await sendAsync<TextMessage>(PacketType.TextMessage, textMessage);
         }
 
         /// <summary>
@@ -179,9 +214,8 @@ namespace Theorem.ChatServices
             await _sslStream.AuthenticateAsClientAsync(_serverHostname);
             _streamWriteSemaphor = new SemaphoreSlim(1, 1);
 
-            // Send handshake
-            await send<Version>(
-                _sslStream,
+            // Send version
+            await sendAsync<Version>(
                 PacketType.Version,
                 new Version
                 {
@@ -192,8 +226,7 @@ namespace Theorem.ChatServices
                 });
 
             // Send auth
-            await send<Authenticate>(
-                _sslStream,
+            await sendAsync<Authenticate>(
                 PacketType.Authenticate,
                 new Authenticate
                 {
@@ -202,7 +235,22 @@ namespace Theorem.ChatServices
                     Opus = false
                 });
 
-            // Now just read 4eva
+            // We need to send pings every so often, otherwise the server disconnects us
+            var pingTimer = new System.Threading.Timer(async (state) => await sendPingAsync(), null, 5000, 5000);
+
+            // Now just read incoming data forever
+            try
+            {
+                await listenAsync();
+            }
+            finally
+            {
+                await pingTimer.DisposeAsync();
+            }
+        }
+
+        private async Task listenAsync()
+        {
             byte[] packetTypeBuffer = new byte[2];
             while (true)
             {
@@ -221,55 +269,223 @@ namespace Theorem.ChatServices
                     BitConverter.ToInt16(packetTypeBuffer));
                 switch (type)
                 {
-                    case PacketType.Version:
-                        Serializer.DeserializeWithLengthPrefix<Version>(_sslStream, PrefixStyle.Fixed32BigEndian);
-                        break;
-                    case PacketType.CryptSetup:
-                        {
-                            var cryptSetup = Serializer.DeserializeWithLengthPrefix<CryptSetup>(
+                    case PacketType.ChannelState:
+                        var channelState = 
+                            Serializer.DeserializeWithLengthPrefix<ChannelState>(
                                 _sslStream, PrefixStyle.Fixed32BigEndian);
-                            await send<Ping>(_sslStream, PacketType.Ping, new Ping());
-                        }
+                        processChannelState(channelState);
+                        break;
+                    case PacketType.ChannelRemove:
+                        var channelRemove = 
+                            Serializer.DeserializeWithLengthPrefix<ChannelRemove>(
+                                _sslStream, PrefixStyle.Fixed32BigEndian);
+                        processChannelRemove(channelRemove);
+                        break;
+                    case PacketType.UserState:
+                        var userState = 
+                            Serializer.DeserializeWithLengthPrefix<UserState>(
+                                _sslStream, PrefixStyle.Fixed32BigEndian);
+                        processUserState(userState);
+                        break;
+                    case PacketType.UserRemove:
+                        var userRemove = 
+                            Serializer.DeserializeWithLengthPrefix<UserRemove>(
+                                _sslStream, PrefixStyle.Fixed32BigEndian);
+                        processUserRemove(userRemove);
+                        break;
+                    case PacketType.TextMessage:
+                        var textMessage = 
+                            Serializer.DeserializeWithLengthPrefix<TextMessage>(
+                                _sslStream, PrefixStyle.Fixed32BigEndian);
+                        processTextMessage(textMessage);
+                        break;
+                    case PacketType.ServerSync:
+                        // This indicates we are finally connected
+                        var serverSync =
+                            Serializer.DeserializeWithLengthPrefix<ServerSync>(
+                                _sslStream, PrefixStyle.Fixed32BigEndian);
+                        _mumbleSessionId = serverSync.Session;
+                        // Join the channel we want to be in
+                        await joinChannelAsync();
+                        IsConnected = true;
+                        onConnected();
                         break;
                     default:
-                        int payloadLength;
-                        if (Serializer.TryReadLengthPrefix(
-                            _sslStream,
-                            PrefixStyle.Fixed32BigEndian,
-                            out payloadLength))
-                        {
-                            _logger.LogDebug($"Packet type {type.ToString()} received with " + 
-                                $"{payloadLength} byte payload.");
-                            if (payloadLength > 0)
-                            {
-                                // read out those bytes
-                                byte[] readBuf = new byte[8];
-                                int bytesRead = 0;
-                                while (bytesRead < payloadLength)
-                                {
-                                    bytesRead += await _sslStream.ReadAsync(
-                                        readBuf,
-                                        0,
-                                        Math.Min(readBuf.Length, (payloadLength - bytesRead)));
-                                }
-                                _logger.LogDebug($"Read {bytesRead} bytes.");
-                            }
-                            else
-                            {
-                                _logger.LogWarning($"Invalid payload length.");
-                            }
-                        }
-                        else
-                        {
-                            _logger.LogDebug($"Packet type {type.ToString()} received, " + 
-                                $"could not read payload.");
-                        }
+                        //_logger.LogDebug($"Packet type {type.ToString()} received");
+                        await processUnknownPayloadAsync();
                         break;
                 }
             }
+            IsConnected = false;
         }
 
-        private async Task send<T>(PacketType type, T packet)
+        private void processChannelState(ChannelState channelState)
+        {
+            if (!(_mumbleChannels.ContainsKey(channelState.ChannelId)))
+            {
+                _mumbleChannels[channelState.ChannelId] = channelState;
+                _logger.LogInformation($"Received new channel state for '{channelState.Name}'.");
+            }
+            else
+            {
+                var cachedChannelState = _mumbleChannels[channelState.ChannelId];
+                if (channelState.ShouldSerializeName())
+                {
+                    cachedChannelState.Name = channelState.Name;
+                }
+                _logger.LogInformation($"Received updated channel state for " + 
+                    $"'{cachedChannelState.Name}'.");
+            }
+        }
+
+        private void processChannelRemove(ChannelRemove channelRemove)
+        {
+            if (!(_mumbleChannels.Remove(channelRemove.ChannelId)))
+            {
+                _logger.LogError($"Server requested removal of channel ID " + 
+                    $"'{channelRemove.ChannelId}' that does not exist in cache.");
+            }
+            else
+            {
+                _logger.LogInformation($"Received channel removal for ID " + 
+                    $"'{channelRemove.ChannelId}'.");
+            }
+        }
+
+        private void processUserState(UserState userState)
+        {
+            if (!(_mumbleUsers.ContainsKey(userState.Session)))
+            {
+                _mumbleUsers[userState.Session] = userState;
+                _logger.LogInformation($"Received new user state for '{userState.Name}'.");
+                this.Users.Add(new UserModel
+                {
+                    FromChatServiceConnection = this,
+                    Id = userState.Session.ToString(),
+                    DisplayName = userState.Name,
+                    Name = userState.Name,
+                    Provider = ChatServiceKind.Mumble,
+                });
+            }
+            else
+            {
+                var cachedUserState = _mumbleUsers[userState.Session];
+                var cachedUserModel = 
+                    Users.SingleOrDefault(u => u.Id == userState.Session.ToString());
+                if (userState.ShouldSerializeName())
+                {
+                    cachedUserState.Name = userState.Name;
+                    cachedUserModel.Name = userState.Name;
+                }
+                if (userState.ShouldSerializeChannelId())
+                {
+                    cachedUserState.ChannelId = userState.ChannelId;
+                }
+                _logger.LogInformation($"Received updated user state for '{cachedUserState.Name}'.");
+            }
+        }
+
+        private void processUserRemove(UserRemove userRemove)
+        {
+            if (!(_mumbleUsers.Remove(userRemove.Session)))
+            {
+                _logger.LogError($"Server requested removal of user session ID " + 
+                    $"'{userRemove.Session}' that does not exist in cache.");
+            }
+            else
+            {
+                _logger.LogInformation($"Received user removal for session ID " + 
+                    $"'{userRemove.Session}'.");
+            }
+            var cachedUserModel = Users.SingleOrDefault(u => u.Id == userRemove.Session.ToString());
+            if (cachedUserModel != null)
+            {
+                Users.Remove(cachedUserModel);
+            }
+        }
+
+        private void processTextMessage(TextMessage textMessage)
+        {
+            foreach (var channel in textMessage.ChannelIds)
+            {
+                var message = new ChatMessageModel
+                {
+                    FromChatServiceConnection = this,
+                    Id = "",
+                    AuthorId = textMessage.Actor.ToString(),
+                    Body = textMessage.Message,
+                    ChannelId = channel.ToString(),
+                    Provider = ChatServiceKind.Mumble,
+                    ProviderInstance = Name,
+                    TimeSent = DateTimeOffset.Now,
+                    IsFromTheorem = (textMessage.Actor == _mumbleSessionId)
+                };
+                onNewMessage(message);
+            }
+        }
+
+        private async Task joinChannelAsync()
+        {
+            if (_channelNameToJoin.Length <= 0)
+            {
+                _logger.LogInformation("No starting channel was specified to join.");
+                return;
+            }
+            var targetChannel = _mumbleChannels.Values.Single(c => c.Name == _channelNameToJoin);
+            if (targetChannel != null)
+            {
+                var userState = new UserState()
+                {
+                    ChannelId = targetChannel.ChannelId
+                };
+                await sendAsync<UserState>(PacketType.UserState, userState);
+            }
+            else
+            {
+                _logger.LogError($"Could not find channel '{_channelNameToJoin}' " + 
+                    $"when attempting to join.");
+            }
+        }
+
+        private async Task processUnknownPayloadAsync()
+        {
+            int payloadLength;
+            if (Serializer.TryReadLengthPrefix(
+                _sslStream,
+                PrefixStyle.Fixed32BigEndian,
+                out payloadLength))
+            {
+                if (payloadLength > 0)
+                {
+                    // read out those bytes
+                    byte[] readBuf = new byte[8];
+                    int bytesRead = 0;
+                    while (bytesRead < payloadLength)
+                    {
+                        bytesRead += await _sslStream.ReadAsync(
+                            readBuf,
+                            0,
+                            Math.Min(readBuf.Length, (payloadLength - bytesRead)));
+                    }
+                    //_logger.LogDebug($"Read {bytesRead} bytes.");
+                }
+                else
+                {
+                    _logger.LogWarning($"Invalid payload length.");
+                }
+            }
+            else
+            {
+                _logger.LogError($"Could not read payload.");
+            }
+        }
+
+        private async Task sendPingAsync()
+        {
+            await sendAsync<Ping>(PacketType.Ping, new Ping());
+        }
+
+        private async Task sendAsync<T>(PacketType type, T packet)
         {
             await _streamWriteSemaphor.WaitAsync();
             try
@@ -295,6 +511,19 @@ namespace Theorem.ChatServices
             if (eventHandler != null)
             {
                 eventHandler(this, EventArgs.Empty);
+            }
+        }
+        
+        /// <summary>
+        /// Used to raise the NewMessage event.
+        /// </summary>
+        /// <param name="message">Event arguments; the message that was received</param>
+        protected virtual void onNewMessage(ChatMessageModel message)
+        {
+            var eventHandler = NewMessage;
+            if (eventHandler != null)
+            {
+                eventHandler(this, message);
             }
         }
 

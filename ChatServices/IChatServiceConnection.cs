@@ -17,6 +17,8 @@ namespace Theorem.ChatServices
 
         ObservableCollection<UserModel> OnlineUsers { get; }
 
+        bool IsConnected { get; }
+
         event EventHandler<EventArgs> Connected;
 
         event EventHandler<ChatMessageModel> NewMessage;
