@@ -199,6 +199,11 @@ namespace Theorem.ChatServices
 
         public async Task StartAsync()
         {
+            // Clear out our members
+            Users.Clear();
+            _mumbleUsers.Clear();
+            _mumbleChannels.Clear();
+
             // Connect
             _logger.LogInformation("Connecting to Mumble server {server}...",
                 _serverHostname);
@@ -406,7 +411,7 @@ namespace Theorem.ChatServices
 
         private void processTextMessage(TextMessage textMessage)
         {
-            foreach (var channel in textMessage.ChannelIds)
+            if (textMessage.ChannelIds == null)
             {
                 var message = new ChatMessageModel
                 {
@@ -414,13 +419,32 @@ namespace Theorem.ChatServices
                     Id = "",
                     AuthorId = textMessage.Actor.ToString(),
                     Body = textMessage.Message,
-                    ChannelId = channel.ToString(),
+                    ChannelId = "",
                     Provider = ChatServiceKind.Mumble,
                     ProviderInstance = Name,
                     TimeSent = DateTimeOffset.Now,
                     IsFromTheorem = (textMessage.Actor == _mumbleSessionId)
                 };
                 onNewMessage(message);
+            }
+            else
+            {
+                foreach (var channel in textMessage.ChannelIds)
+                {
+                    var message = new ChatMessageModel
+                    {
+                        FromChatServiceConnection = this,
+                        Id = "",
+                        AuthorId = textMessage.Actor.ToString(),
+                        Body = textMessage.Message,
+                        ChannelId = channel.ToString(),
+                        Provider = ChatServiceKind.Mumble,
+                        ProviderInstance = Name,
+                        TimeSent = DateTimeOffset.Now,
+                        IsFromTheorem = (textMessage.Actor == _mumbleSessionId)
+                    };
+                    onNewMessage(message);
+                }
             }
         }
 
