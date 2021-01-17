@@ -43,7 +43,7 @@ namespace Theorem.Middleware
             {
                 message.FromChatServiceConnection?.SendMessageToChannelIdAsync(
                     message.ChannelId,
-                    message.Body);
+                    message);
             }
             return MiddlewareResult.Continue;
         }

@@ -91,8 +91,10 @@ namespace Theorem.Middleware
             serviceConnection
                 .SendMessageToChannelIdAsync(
                     message.ChannelId,
-                    "Available commands: \n\n" + verbList
-                )
+                    new ChatMessageModel()
+                    {
+                        Body = ("Available commands: \n\n" + verbList),
+                    })
                 .Wait();
             return MiddlewareResult.Stop;
         }
