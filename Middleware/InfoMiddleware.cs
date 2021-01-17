@@ -126,8 +126,10 @@ namespace Theorem.Middleware
             serviceConnection
                 .SendMessageToChannelIdAsync(
                     message.ChannelId,
-                    "Available middleware: " + printList
-                )
+                    new ChatMessageModel()
+                    {
+                        Body = "Available middleware: " + printList
+                    })
                 .Wait();
             return MiddlewareResult.Stop;
         }

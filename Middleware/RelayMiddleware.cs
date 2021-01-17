@@ -207,7 +207,11 @@ namespace Theorem.Middleware
                             .Name;
                         relay.ToChatService.SendMessageToChannelIdAsync(
                             relay.ToChannelId,
-                            $"{relay.ChatPrefix}{messageDisplayName}: {message.Body}");
+                            new ChatMessageModel()
+                            {
+                                Body = $"{relay.ChatPrefix}{messageDisplayName}: {message.Body}",
+                                Attachments = message.Attachments?.ToList(),
+                            });
                     }
                 }
             }

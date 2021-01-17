@@ -8,8 +8,10 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using ProtoBuf;
@@ -177,12 +179,38 @@ namespace Theorem.ChatServices
             }
         }
 
-        public async Task SendMessageToChannelIdAsync(string channelId, string body)
+        public async Task SendMessageToChannelIdAsync(string channelId, ChatMessageModel message)
         {
+            string messageText = message.Body;
+            
+            // Make URLs clickable
+            var urlMatches = Regex.Matches(messageText,
+                @"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\." + 
+                @"[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)");
+            
+            // Process matches from the back of the string forward, to avoid offsetting our indexes
+            foreach (Match match in urlMatches.OrderByDescending(u => u.Index))
+            {
+                var url = HttpUtility.HtmlAttributeEncode(match.Value);
+                messageText = messageText.Substring(0, match.Index) + $"<a href=\"{url}\">{match.Value}</a>" + 
+                    messageText.Substring(match.Index + match.Length);
+            }
+
+            // Insert any image attachments inline
+            if (message.Attachments?.Count() > 0)
+            {
+                foreach (var attachment in message.Attachments)
+                {
+                    var encodedName = HttpUtility.HtmlEncode(attachment.Name);
+                    var encodedUri = HttpUtility.HtmlAttributeEncode(attachment.Uri);
+                    messageText += $"<br /><a href=\"{encodedUri}\">{encodedName}</a>";
+                }
+            }
+
             var textMessage = new TextMessage
             {
                 ChannelIds = new uint[]{ UInt32.Parse(channelId) },
-                Message = body
+                Message = messageText
             };
             await sendAsync<TextMessage>(PacketType.TextMessage, textMessage);
         }
@@ -411,6 +439,9 @@ namespace Theorem.ChatServices
 
         private void processTextMessage(TextMessage textMessage)
         {
+            // Hackily strip any yucky HTML that mumble inserts...
+            textMessage.Message = Regex.Replace(textMessage.Message, "<[^>]*(>|$)", string.Empty);
+
             if (textMessage.ChannelIds == null)
             {
                 var message = new ChatMessageModel

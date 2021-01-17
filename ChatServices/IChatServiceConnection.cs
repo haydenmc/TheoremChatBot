@@ -25,7 +25,7 @@ namespace Theorem.ChatServices
         
         Task StartAsync();
 
-        Task SendMessageToChannelIdAsync(string channelId, string body);
+        Task SendMessageToChannelIdAsync(string channelId, ChatMessageModel message);
 
         Task<string> GetChannelIdFromChannelNameAsync(string channelName);
 

@@ -221,7 +221,7 @@ namespace Theorem.ChatServices
         /// <param name="body">Body of the message</param>
         public async Task SendMessageToChannelIdAsync(
             string channelId,
-            string body)
+            ChatMessageModel message)
         {
             using (var httpClient = new HttpClient())
             {
@@ -229,7 +229,7 @@ namespace Theorem.ChatServices
                 var postData = new FormUrlEncodedContent(new[] { 
                     new KeyValuePair<string, string>("token", _apiToken), 
                     new KeyValuePair<string, string>("channel", channelId), 
-                    new KeyValuePair<string, string>("text", body),
+                    new KeyValuePair<string, string>("text", message.Body),
                     new KeyValuePair<string, string>("as_user", "true")
                 }); 
                 var result = await httpClient.PostAsync("chat.postMessage", postData);

@@ -356,7 +356,10 @@ namespace Theorem.Middleware
                 {
                     await connection.Key.SendMessageToChannelIdAsync(
                         connection.Value,
-                        $"🎥 Someone is streaming! https://mixer.com/{username}");
+                        new ChatMessageModel()
+                        {
+                            Body = $"🎥 Someone is streaming! https://mixer.com/{username}"
+                        });
                 }
             }
         }

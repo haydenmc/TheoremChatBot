@@ -442,13 +442,13 @@ namespace Theorem.ChatServices
         /// </summary>
         /// <param name="channelSlackId">Channel ID</param>
         /// <param name="body">Body of the message</param>
-        public async Task SendMessageToChannelIdAsync(string channelId, string body)
+        public async Task SendMessageToChannelIdAsync(string channelId, ChatMessageModel message)
         {
             using (var httpClient = getHttpClient())
             {
                 var messageObject = new {
                     channel_id = channelId,
-                    message = body
+                    message = message.Body
                 };
                 var messageString = JsonConvert.SerializeObject(messageObject);
                 _logger.LogDebug("Sending message to channel: {messagePayload}", messageString);
@@ -544,6 +544,29 @@ namespace Theorem.ChatServices
                         result.StatusCode,
                         result.Headers.Location,
                         result.ReasonPhrase);
+                }
+            }
+        }
+
+        public async Task<string> GetPublicLinkForFile(string fileId)
+        {
+            using (var httpClient = getHttpClient())
+            {
+                var result = await httpClient.GetAsync($"api/v4/files/{fileId}/link");
+                if (!result.IsSuccessStatusCode)
+                {
+                    _logger.LogError("Encountered error code {code} calling {uri}: {msg}",
+                        result.StatusCode,
+                        result.Headers.Location,
+                        result.ReasonPhrase);
+                    return "";
+                }
+                else
+                {
+                    var content = await result.Content.ReadAsStringAsync();
+                    var parsedContent = JObject.Parse(content);
+                    return parsedContent.ContainsKey("link") ? 
+                        parsedContent.GetValue("link").ToObject<string>() : "";
                 }
             }
         }

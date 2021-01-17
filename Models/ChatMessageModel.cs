@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 using Theorem.ChatServices;
 
@@ -22,6 +23,10 @@ namespace Theorem.Models
         public virtual DateTimeOffset TimeSent { get; set; }
 
         public virtual string ThreadingId { get; set; }
+
+        // Don't store these just yet
+        [NotMapped]
+        public virtual IEnumerable<AttachmentModel> Attachments { get; set; }
 
         /* Utility */
         [NotMapped]

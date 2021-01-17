@@ -96,7 +96,10 @@ namespace Theorem.Middleware
                             {
                                 chatServiceConnection.SendMessageToChannelIdAsync(
                                     message.ChannelId, 
-                                    ((ISummonable)middlewareInstance).Usage)
+                                    new ChatMessageModel()
+                                    {
+                                        Body = ((ISummonable)middlewareInstance).Usage
+                                    })
                                     .Wait();
                                 // halt pipeline execution after matching with middleware 
                                 // and displaying usage info

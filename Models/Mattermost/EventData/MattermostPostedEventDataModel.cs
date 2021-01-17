@@ -7,9 +7,52 @@ using Theorem.Converters;
 
 namespace Theorem.Models.Mattermost.EventData
 {
+    public class MattermostPostedEventPostMetadataFileDataModel
+    {
+        [JsonProperty("id")]
+        public string Id { get; set; }
+        
+        [JsonProperty("user_id")]
+        public string UserId { get; set; }
+
+        [JsonProperty("post_id")]
+        public string PostId { get; set; }
+
+        [JsonProperty("create_at")]
+        public ulong CreateAt { get; set; }
+
+        [JsonProperty("update_at")]
+        public ulong UpdateAt { get; set; }
+
+        [JsonProperty("delete_at")]
+        public ulong DeleteAt { get; set; }
+
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+        [JsonProperty("extension")]
+        public string Extension { get; set; }
+
+        [JsonProperty("size")]
+        public ulong Size { get; set; }
+
+        [JsonProperty("mime_type")]
+        public string MimeType { get; set; }
+
+        [JsonProperty("width")]
+        public ulong Width { get; set; }
+
+        [JsonProperty("height")]
+        public ulong Height { get; set; }
+
+        [JsonProperty("has_preview_image")]
+        public bool HasPreviewImage { get; set; }
+    }
+
     public class MattermostPostedEventPostMetadataDataModel
     {
-        // TODO
+        [JsonProperty("files")]
+        public IEnumerable<MattermostPostedEventPostMetadataFileDataModel> Files { get; set; }
     }
 
     public class MattermostPostedEventPostDataModel
@@ -100,6 +143,32 @@ namespace Theorem.Models.Mattermost.EventData
             getChannelMemberCountTask.Wait();
             var channelMemberCount = getChannelMemberCountTask.Result;
 
+            List<AttachmentModel> attachments = null;
+            if ((chatServiceConnection is MattermostChatServiceConnection) &&
+                (Post?.Metadata?.Files?.Count() > 0))
+            {
+                attachments = new List<AttachmentModel>();
+                var mmService = chatServiceConnection as MattermostChatServiceConnection;
+                foreach (var file in Post.Metadata.Files)
+                {
+                    var extension = file.Extension.ToLowerInvariant();
+                    var type = AttachmentKind.Unknown;
+                    if ((extension == "jpg") ||
+                        (extension == "jpeg") ||
+                        (extension == "png") ||
+                        (extension == "gif"))
+                    {
+                        type = AttachmentKind.Image;
+                    }
+
+                    attachments.Add(new AttachmentModel(){
+                        Kind = type,
+                        Name = file.Name,
+                        Uri = mmService.GetPublicLinkForFile(file.Id).Result,
+                    });
+                }
+            }
+
             return new ChatMessageModel()
             {
                 Id = Post.Id,
@@ -110,6 +179,7 @@ namespace Theorem.Models.Mattermost.EventData
                 ChannelId = Post.ChannelId,
                 TimeSent = DateTimeOffset.FromUnixTimeMilliseconds((long)Post.CreateAt),
                 ThreadingId = Post.ParentId,
+                Attachments = attachments,
                 FromChatServiceConnection = chatServiceConnection,
                 IsFromTheorem = (Post.UserId == chatServiceConnection.UserId),
                 IsMentioningTheorem = 
