@@ -42,6 +42,21 @@ More docs later. I'm just using this to store some useful info.
                 }
             ]
         },
+        "EzFtlStreamAnnouncement": {
+            "Enabled": true,
+            "Hostname": "myezftlinstance.tv",
+            "Port": 80,
+            "AnnounceChannels": [
+                {
+                    "ChatServiceName": "WarmItUpMattermost",
+                    "ChannelName": "gaming"
+                },
+                {
+                    "ChatServiceName": "WarmItUpMumble",
+                    "ChannelName": "Game Night"
+                }
+            ]
+        },
         "AttendanceRelay": {
             "Enabled": true,
             "Relays": [
