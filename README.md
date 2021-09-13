@@ -11,7 +11,7 @@ More docs later. I'm just using this to store some useful info.
             "Service": "Mattermost",
             "ServerHostname": "chat.myserver.com",
             "AccessToken": "youraccesstokenhere",
-            "Middleware": [ "Echo", "MixerStreamAnnouncement" ]
+            "Middleware": [ "Echo", "EzFtlStreamAnnouncement" ]
         },
         "WarmItUpSlack": {
             "Service": "Slack",
@@ -50,17 +50,6 @@ More docs later. I'm just using this to store some useful info.
               "ChannelName": "Game Night"
             }
           ]
-        },
-        "MixerStreamAnnouncement": {
-            "Enabled": true,
-            "ClientId": "CLIENTIDHERE",
-            "MixerChannels": [ "HammyCheesy" ],
-            "AnnounceChannels": [
-                {
-                    "ChatServiceName": "WarmItUpMattermost",
-                    "ChannelName": "gaming"
-                }
-            ]
         },
         "EzFtlStreamAnnouncement": {
             "Enabled": true,
