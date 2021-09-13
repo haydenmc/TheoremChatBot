@@ -31,6 +31,26 @@ More docs later. I'm just using this to store some useful info.
         "Echo": {
             "Enabled": true
         },
+        "GlimeshStreamAnnouncement": {
+          "Enabled": true,
+          "ClientId": "CLIENTIDHERE",
+          "ClientSecret": "CLIENTSECRETHERE",
+          "GlimeshUsernames": [
+            "chickencam",
+            "HammyCheesy",
+            "SmashBets"
+          ],
+          "AnnounceChannels": [
+            {
+              "ChatServiceName": "WarmItUpMattermost",
+              "ChannelName": "gaming"
+            },
+            {
+              "ChatServiceName": "WarmItUpMumble",
+              "ChannelName": "Game Night"
+            }
+          ]
+        }
         "MixerStreamAnnouncement": {
             "Enabled": true,
             "ClientId": "CLIENTIDHERE",
