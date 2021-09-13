@@ -17,8 +17,7 @@ using Theorem.Utility;
 
 namespace Theorem.Middleware
 {
-    public class GlimeshStreamAnnouncementMiddleware :
-        IMiddleware
+    public class GlimeshStreamAnnouncementMiddleware : IMiddleware
     {
         /// <summary>
         /// Logging instance
@@ -76,13 +75,11 @@ namespace Theorem.Middleware
             }
         }
 
-
         /// <summary>
         /// Mapping of Glimesh usernames to respective channel IDs
         /// </summary>
         private Dictionary<string, string> _glimeshUsernameChannelIdMap
             = new Dictionary<string, string>();
-
 
         /// <summary>
         /// Contains a set of channel IDs that are already marked as streaming
@@ -139,7 +136,7 @@ namespace Theorem.Middleware
         private async void onChatServiceConnected(object sender, EventArgs e)
         {
             _logger.LogInformation("onChatServiceConnected");
-           var connection = sender as IChatServiceConnection;
+            var connection = sender as IChatServiceConnection;
             var matchingService = _configuration
                 .GetSection("AnnounceChannels")
                 .GetChildren()
