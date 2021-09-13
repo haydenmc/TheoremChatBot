@@ -50,7 +50,7 @@ More docs later. I'm just using this to store some useful info.
               "ChannelName": "Game Night"
             }
           ]
-        }
+        },
         "MixerStreamAnnouncement": {
             "Enabled": true,
             "ClientId": "CLIENTIDHERE",
