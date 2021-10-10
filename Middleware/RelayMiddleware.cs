@@ -175,9 +175,13 @@ namespace Theorem.Middleware
             {
                 if (relay.ToChannelId != null)
                 {
-                    await relay.ToChatService.SetChannelTopicAsync(
+                    await relay.ToChatService.SendMessageToChannelIdAsync(
                         relay.ToChannelId,
-                        relay.AttendancePrefix + attendanceString);
+                        new ChatMessageModel()
+                        {
+                            Body = $"{relay.AttendancePrefix}{attendanceString}",
+                            Attachments = null,
+                        });
                     _logger.LogInformation("Set topic for {service}: {channel}:{id}",
                         relay.ToChatService.Name,
                         relay.ToChannelName,
@@ -200,16 +204,20 @@ namespace Theorem.Middleware
                     // replay this message to the destination
                     if (relay.IsActive)
                     {
-                        var messageDisplayName = message.
+                        string displayName = message.AuthorId;
+                        var messageUser = message.
                             FromChatServiceConnection.
                             Users.
-                            Single(u => u.Id == message.AuthorId)
-                            .Name;
+                            SingleOrDefault(u => u.Id == message.AuthorId);
+                        if (messageUser != null)
+                        {
+                            displayName = messageUser.Name;
+                        }
                         relay.ToChatService.SendMessageToChannelIdAsync(
                             relay.ToChannelId,
                             new ChatMessageModel()
                             {
-                                Body = $"{relay.ChatPrefix}{messageDisplayName}: {message.Body}",
+                                Body = $"{relay.ChatPrefix}{displayName}: {message.Body}",
                                 Attachments = message.Attachments?.ToList(),
                             });
                     }

@@ -5,5 +5,6 @@ namespace Theorem.Models
         Slack,
         Mattermost,
         Mumble,
+        Matrix,
     }
 }
