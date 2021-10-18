@@ -14,6 +14,9 @@ namespace Theorem.Models
         // Unique ID for this user on the service
         public string Id { get; set; }
 
+        // Whether or not this user is us
+        public bool IsTheorem { get; set; }
+
         // Which provider does this user belong to
         public ChatServiceKind Provider { get; set; }
 

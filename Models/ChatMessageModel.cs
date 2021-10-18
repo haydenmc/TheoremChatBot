@@ -15,6 +15,10 @@ namespace Theorem.Models
 
         public virtual string AuthorId { get; set; }
 
+        public virtual string AuthorAlias { get; set; }
+
+        public virtual string AuthorDisplayName { get; set; }
+
         public virtual string Body { get; set; }
 
         public virtual string ChannelId { get; set; }

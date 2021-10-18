@@ -152,6 +152,47 @@ namespace Theorem.ChatServices
             return eventResponse.EventId;
         }
 
+        public async Task<string> UpdateMessageAsync(string channelId, string messageId,
+            ChatMessageModel message)
+        {
+            // TODO: Only support text messages for now
+            var payload = new Dictionary<string, object>()
+            {
+                {
+                    "m.new_content",
+                    new Dictionary<string, object>()
+                    {
+                        { "msgtype", "m.text" },
+                        { "body", message.Body },
+                    }
+                },
+                {
+                    "m.relates_to",
+                    new Dictionary<string, object>()
+                    {
+                        { "rel_type", "m.replace" },
+                        { "event_id", messageId },
+                    }
+                },
+                { "msgtype", "m.text" },
+                { "body", $"* {message.Body}" },
+            };
+
+            var payloadString = JsonSerializer.Serialize(payload);
+            var content = new StringContent(payloadString, Encoding.UTF8, "application/json");
+            var result = await _httpClient.PutAsync(
+                $"/_matrix/client/r0/rooms/{HttpUtility.UrlEncode(channelId)}" +
+                $"/send/m.room.message/{_nextTxnId++}", content);
+            if (result.StatusCode != HttpStatusCode.OK)
+            {
+                var error = await result.Content.ReadFromJsonAsync<MatrixError>();
+                throw new ApplicationException($"Received error sending room message " +
+                    $"{error.ErrorCode}: {error.Error}");
+            }
+            var response = await result.Content.ReadFromJsonAsync<MatrixSendResponse>();
+            return messageId;
+        }
+
         public Task SetChannelTopicAsync(string channelId, string topic)
         {
             // TODO
@@ -218,6 +259,7 @@ namespace Theorem.ChatServices
             var response = await result.Content.ReadFromJsonAsync<MatrixSyncResponse>();
             _nextSyncBatchToken = response.NextBatchToken;
             await joinInvitedRoomsAsync(response);
+            populateChannels(response);
         }
 
         private async Task joinInvitedRoomsAsync(MatrixSyncResponse syncResponse)
@@ -291,22 +333,79 @@ namespace Theorem.ChatServices
             }
         }
 
-        private void updateChannels(MatrixSyncResponse syncResponse)
+        private void populateChannels(MatrixSyncResponse syncResponse)
         {
             if (syncResponse.Rooms?.JoinedRooms != null)
             {
-                
+                foreach (var room in syncResponse.Rooms.JoinedRooms)
+                {
+                    var roomId = room.Key;
+                    var roomAlias = roomId;
+                    var roomName = roomId;
+                    var members = new List<UserModel>();
+                    foreach (var roomEvent in room.Value.State.Events)
+                    {
+                        if (roomEvent is MatrixRoomCanonicalAliasEvent)
+                        {
+                            roomAlias = 
+                                (roomEvent as MatrixRoomCanonicalAliasEvent).Content.RoomAlias;
+                        }
+                        if (roomEvent is MatrixRoomNameEvent)
+                        {
+                            roomName = (roomEvent as MatrixRoomNameEvent).Content.Name;
+                        }
+                        if (roomEvent is MatrixRoomMemberEvent)
+                        {
+                            var memberEvent = roomEvent as MatrixRoomMemberEvent;
+                            if (!memberEvent.Content.Membership.Equals("join",
+                                StringComparison.OrdinalIgnoreCase))
+                            {
+                                continue;
+                            }
+                            var member = new UserModel()
+                            {
+                                Id = memberEvent.Sender,
+                                Provider = ChatServiceKind.Matrix,
+                                Alias = memberEvent.Sender,
+                                DisplayName = memberEvent.Content.DisplayName,
+                                Presence = UserModel.PresenceKind.Online,
+                                FromChatServiceConnection = this,
+                            };
+                            members.Add(member);
+                        }
+                    }
+                    
+                    _channels.Add(new ChannelModel()
+                    {
+                        Id = roomId,
+                        Alias = roomAlias,
+                        DisplayName = roomName,
+                        Users = members,
+                    });
+                }
             }
+            onChannelsUpdated();
         }
 
         private void processRoomMessage(string roomId, MatrixRoomMessageEvent message)
         {
+            string alias = message.Sender;
+            string displayName = message.Sender;
+            var channel = _channels.SingleOrDefault(c => (c.Id == roomId));
+            if (channel != null)
+            {
+                var sender = channel.Users.SingleOrDefault(u => (u.Id == message.Sender));
+                alias = sender.Alias;
+                displayName = sender.DisplayName;
+            }
             var messageModel = new ChatMessageModel()
             {
                 Id = message.EventId,
                 Provider = ChatServiceKind.Matrix,
                 ProviderInstance = Name,
                 AuthorId = message.Sender,
+                AuthorAlias = alias,
+                AuthorDisplayName = displayName,
                 Body = message.Content?.Body,
                 ChannelId = roomId,
                 TimeSent = DateTimeOffset.FromUnixTimeMilliseconds(

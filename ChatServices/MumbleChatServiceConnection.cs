@@ -209,6 +209,14 @@ namespace Theorem.ChatServices
             return ""; // Mumble does not assign IDs to messages
         }
 
+        public async Task<string> UpdateMessageAsync(string channelId, string messageId,
+            ChatMessageModel message)
+        {
+            _logger.LogWarning("Mumble does not support editing messages - " + 
+                "sending a new message instead.");
+            return await SendMessageToChannelIdAsync(channelId, message);
+        }
+
         /// <summary>
         /// Constructs a new instance of MumbleChatServiceConnection.
         /// </summary>
@@ -338,6 +346,7 @@ namespace Theorem.ChatServices
                         // Join the channel we want to be in
                         await joinChannelAsync();
                         IsConnected = true;
+                        updateChannelStore();
                         onConnected();
                         break;
                     default:
@@ -427,6 +436,14 @@ namespace Theorem.ChatServices
         {
             // Hackily strip any yucky HTML that mumble inserts...
             textMessage.Message = Regex.Replace(textMessage.Message, "<[^>]*(>|$)", string.Empty);
+            var alias = textMessage.Actor.ToString();
+            var displayName = textMessage.Actor.ToString();
+            if (_mumbleUsers.ContainsKey(textMessage.Actor))
+            {
+                var user = _mumbleUsers[textMessage.Actor];
+                alias = user.Name;
+                displayName = user.Name;
+            }
             if (textMessage.ChannelIds == null)
             {
                 var message = new ChatMessageModel
@@ -434,6 +451,8 @@ namespace Theorem.ChatServices
                     FromChatServiceConnection = this,
                     Id = "",
                     AuthorId = textMessage.Actor.ToString(),
+                    AuthorAlias = alias,
+                    AuthorDisplayName = displayName,
                     Body = textMessage.Message,
                     ChannelId = "",
                     Provider = ChatServiceKind.Mumble,
@@ -452,6 +471,8 @@ namespace Theorem.ChatServices
                         FromChatServiceConnection = this,
                         Id = "",
                         AuthorId = textMessage.Actor.ToString(),
+                        AuthorAlias = alias,
+                        AuthorDisplayName = displayName,
                         Body = textMessage.Message,
                         ChannelId = channel.ToString(),
                         Provider = ChatServiceKind.Mumble,
@@ -545,6 +566,10 @@ namespace Theorem.ChatServices
 
         private void updateChannelStore()
         {
+            if (!IsConnected)
+            {
+                return;
+            }
             var channelModelsById = new Dictionary<uint, ChannelModel>();
             foreach (var channel in _mumbleChannels.Values)
             {
@@ -562,7 +587,8 @@ namespace Theorem.ChatServices
             {
                 var userModel = new UserModel()
                 {
-                    Id = user.Session.ToString(),
+                    Id = user.Name,
+                    IsTheorem = (user.Session == _mumbleSessionId),
                     Provider = ChatServiceKind.Mumble,
                     Alias = user.Name,
                     DisplayName = user.Name,

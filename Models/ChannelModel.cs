@@ -15,6 +15,6 @@ namespace Theorem.Models
         public string DisplayName { get; set; }
 
         // List of users in this channel
-        public IList<UserModel> Users { get; set; }
+        public ICollection<UserModel> Users { get; set; }
     }
 }
