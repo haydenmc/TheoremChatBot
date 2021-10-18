@@ -1,0 +1,32 @@
+name: Linux-x64 Build and Publish
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 5.0.x
+    - name: Clone repository
+      uses: actions/checkout@v2
+    - name: Restore dependencies
+      run: dotnet restore src/Theorem.sln
+    - name: Build
+      run: dotnet build --no-restore src/Theorem.sln
+    - name: Publish
+      run: dotnet publish -c Release -r linux-x64 --self-contained=true -p:PublishReadyToRun=true -o publish/Theorem src/Theorem/Theorem.csproj
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: Theorem
+        path: publish/Theorem
+        if-no-files-found: error

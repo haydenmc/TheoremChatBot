@@ -1,9 +1,11 @@
 # Theorem Chat Bot
+
 Theorem is a generic chat bot I built for whatever the eff I want. 💅
 
 More docs later. I'm just using this to store some useful info.
 
 # appsettings.json example
+
 ```json
 {
     "ChatServiceConnections": {

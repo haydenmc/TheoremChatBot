@@ -3,9 +3,9 @@ WORKDIR /app
 
 FROM mcr.microsoft.com/dotnet/core/sdk:5.0 AS build
 WORKDIR /src
-COPY ["Theorem.csproj", "./"]
+COPY ["src/Theorem/Theorem.csproj", "./"]
 RUN dotnet restore "./Theorem.csproj"
-COPY . .
+COPY src/Theorem/ .
 WORKDIR "/src/."
 RUN dotnet build "Theorem.csproj" -c Release -o /app/build
 
