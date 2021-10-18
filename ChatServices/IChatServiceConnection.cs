@@ -1,5 +1,5 @@
 using System;
-using System.Collections.ObjectModel;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Theorem.Models;
 
@@ -13,23 +13,24 @@ namespace Theorem.ChatServices
 
         string UserName { get; }
 
-        ObservableCollection<UserModel> Users { get; }
-
-        ObservableCollection<UserModel> OnlineUsers { get; }
+        ICollection<ChannelModel> Channels { get; }
 
         bool IsConnected { get; }
 
         event EventHandler<EventArgs> Connected;
 
-        event EventHandler<ChatMessageModel> NewMessage;
+        event EventHandler<ChatMessageModel> MessageReceived;
+
+        event EventHandler<ICollection<ChannelModel>> ChannelsUpdated;
         
         Task StartAsync();
 
-        Task SendMessageToChannelIdAsync(string channelId, ChatMessageModel message);
+        Task<string> SendMessageToChannelIdAsync(string channelId, ChatMessageModel message);
+
+        Task<string> UpdateMessageAsync(string channelId, string messageId,
+            ChatMessageModel message);
 
         Task<string> GetChannelIdFromChannelNameAsync(string channelName);
-
-        Task<int> GetMemberCountFromChannelIdAsync(string channelId);
 
         Task SetChannelTopicAsync(string channelId, string topic);
     }

@@ -44,28 +44,33 @@ namespace Theorem.Utility
             while (true)
             {
                 lastRun = DateTime.Now;
+                Exception exception = null;
                 try
                 {
                     await action();
                 }
                 catch (Exception e)
                 {
-                    // If the action has managed to run for more than a minimal amount
-                    // of time, reset the retry count.
-                    TimeSpan runTime = DateTime.Now.Subtract(lastRun);
-                    if (runTime.TotalSeconds > 10)
-                    {
-                        currentRetry = 0;
-                    }
-                    uint delaySeconds = (uint)Math.Pow(2, currentRetry);
-                    if (maxRetryDelaySeconds != 0 && (delaySeconds > maxRetryDelaySeconds))
-                    {
-                        delaySeconds = maxRetryDelaySeconds;
-                    }
-                    onException(e, (currentRetry, delaySeconds));
-                    currentRetry++;
-                    Thread.Sleep(TimeSpan.FromSeconds(delaySeconds));
+                    exception = e;
                 }
+                // If the action has managed to run for more than a minimal amount
+                // of time, reset the retry count.
+                TimeSpan runTime = DateTime.Now.Subtract(lastRun);
+                if (runTime.TotalSeconds > 10)
+                {
+                    currentRetry = 0;
+                }
+                uint delaySeconds = (uint)Math.Pow(2, currentRetry);
+                if (maxRetryDelaySeconds != 0 && (delaySeconds > maxRetryDelaySeconds))
+                {
+                    delaySeconds = maxRetryDelaySeconds;
+                }
+                if (exception != null)
+                {
+                    onException(exception, (currentRetry, delaySeconds));
+                }
+                currentRetry++;
+                Thread.Sleep(TimeSpan.FromSeconds(delaySeconds));
             }
         }
     }

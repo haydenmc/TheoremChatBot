@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Theorem.ChatServices;
@@ -10,8 +11,7 @@ using Theorem.Models;
 namespace Theorem.Middleware
 {
     // Middleware to relay messages and attendance of one service across to another.
-    public class RelayMiddleware :
-        IMiddleware
+    public class RelayMiddleware : IMiddleware
     {
         private class RelayChannel
         {
@@ -22,10 +22,17 @@ namespace Theorem.Middleware
             public IChatServiceConnection ToChatService;
             public string ToChannelName;
             public string ToChannelId;
-            public string AttendancePrefix;
             public string ChatPrefix;
+            public string AttendanceStarted;
+            public string AttendancePrefix;
+            public string AttendanceEndedPrefix;
             public bool RelayChat;
             public bool RelayAttendance;
+
+            public DateTimeOffset AttendanceSessionStarted;
+            public string AttendanceSessionMessageId;
+            public IList<UserModel> CurrentAttendanceSessionUsers;
+            public IList<UserModel> TotalAttendanceSessionUsers;
         }
 
         /// <summary>
@@ -65,14 +72,16 @@ namespace Theorem.Middleware
             var relayConfigs = _configuration.GetSection("Relays").GetChildren();
             foreach (var relayConfig in relayConfigs)
             {
-                var fromChatServiceName  = relayConfig.GetValue<string>("FromChatServiceName");
-                var fromChannelName      = relayConfig.GetValue<string>("FromChannelName");
-                var toChatServiceName    = relayConfig.GetValue<string>("ToChatServiceName");
-                var toChannelName        = relayConfig.GetValue<string>("ToChannelName");
-                var attendancePrefix     = relayConfig.GetValue<string>("AttendancePrefix");
-                var chatPrefix           = relayConfig.GetValue<string>("ChatPrefix");
-                var relayChat            = relayConfig.GetValue<bool>  ("RelayChat");
-                var relayAttendance      = relayConfig.GetValue<bool>  ("RelayAttendance");
+                var fromChatServiceName   = relayConfig.GetValue<string>("FromChatServiceName");
+                var fromChannelName       = relayConfig.GetValue<string>("FromChannelName");
+                var toChatServiceName     = relayConfig.GetValue<string>("ToChatServiceName");
+                var toChannelName         = relayConfig.GetValue<string>("ToChannelName");
+                var chatPrefix            = relayConfig.GetValue<string>("ChatPrefix");
+                var attendanceStarted     = relayConfig.GetValue<string>("AttendanceStarted");
+                var attendancePrefix      = relayConfig.GetValue<string>("AttendancePrefix");
+                var attendanceEndedPrefix = relayConfig.GetValue<string>("AttendanceEndedPrefix");
+                var relayChat             = relayConfig.GetValue<bool>  ("RelayChat");
+                var relayAttendance       = relayConfig.GetValue<bool>  ("RelayAttendance");
 
                 var fromChatService = _chatServiceConnections
                     .SingleOrDefault(c => c.Name == fromChatServiceName);
@@ -89,15 +98,21 @@ namespace Theorem.Middleware
                 {
                     _relays.Add(new RelayChannel()
                     {
-                        IsActive         = false,
-                        FromChatService  = fromChatService,
-                        FromChannelName  = fromChannelName,
-                        ToChatService    = toChatService,
-                        ToChannelName    = toChannelName,
-                        AttendancePrefix = attendancePrefix,
-                        ChatPrefix       = chatPrefix,
-                        RelayChat        = relayChat,
-                        RelayAttendance  = relayAttendance,
+                        IsActive                      = false,
+                        FromChatService               = fromChatService,
+                        FromChannelName               = fromChannelName,
+                        ToChatService                 = toChatService,
+                        ToChannelName                 = toChannelName,
+                        ChatPrefix                    = chatPrefix,
+                        AttendanceStarted             = attendanceStarted,
+                        AttendancePrefix              = attendancePrefix,
+                        AttendanceEndedPrefix         = attendanceEndedPrefix,
+                        RelayChat                     = relayChat,
+                        RelayAttendance               = relayAttendance,
+                        AttendanceSessionStarted      = DateTimeOffset.MinValue,
+                        AttendanceSessionMessageId    = "",
+                        CurrentAttendanceSessionUsers = new List<UserModel>(),
+                        TotalAttendanceSessionUsers   = new List<UserModel>(),
                     });
                     _logger.LogInformation(
                         "Added new [chat: {chat}, attendance: {attendance}] relay: {fromService}/{fromChannel} -> {toService}/{toChannel}",
@@ -150,10 +165,10 @@ namespace Theorem.Middleware
                     if (relay.RelayAttendance)
                     {
                         // Send first update
-                        onlineUsersChanged(relay.FromChatService);
+                        channelsUpdated(relay.FromChatService, relay.FromChatService.Channels);
                         // Subscribe to future updates
-                        relay.FromChatService.OnlineUsers.CollectionChanged += 
-                            (s, a) => onlineUsersChanged(relay.FromChatService);
+                        relay.FromChatService.ChannelsUpdated += 
+                            (_, channels) => channelsUpdated(relay.FromChatService, channels);
                     }
 
                     relay.IsActive = true;
@@ -161,13 +176,10 @@ namespace Theorem.Middleware
             }
         }
 
-        private async void onlineUsersChanged(IChatServiceConnection chatServiceConnection)
+        private async void channelsUpdated(IChatServiceConnection chatServiceConnection,
+            ICollection<ChannelModel> channels)
         {
-            var attendanceString = 
-                String.Join(", ", chatServiceConnection.OnlineUsers.Select(u => u.Name));
-            _logger.LogInformation("Users changed for {service}: {attendance}",
-                chatServiceConnection.Name,
-                attendanceString);
+            // TODO: mutex
             var relays = _relays.Where(c => 
                 c.RelayAttendance && 
                 (c.FromChatService == chatServiceConnection));
@@ -175,15 +187,138 @@ namespace Theorem.Middleware
             {
                 if (relay.ToChannelId != null)
                 {
-                    await relay.ToChatService.SetChannelTopicAsync(
-                        relay.ToChannelId,
-                        relay.AttendancePrefix + attendanceString);
-                    _logger.LogInformation("Set topic for {service}: {channel}:{id}",
-                        relay.ToChatService.Name,
-                        relay.ToChannelName,
-                        relay.ToChannelId);
+                    var channelUpdate = 
+                        channels.SingleOrDefault(c => (c.Id == relay.FromChannelId));
+                    if (channelUpdate != null)
+                    {
+                        await processAttendanceUpdateAsync(relay, channelUpdate);
+                    }
                 }
             }
+        }
+
+        private async Task processAttendanceUpdateAsync(RelayChannel relay,
+            ChannelModel channelUpdate)
+        {
+            var updatedAttendance = channelUpdate.Users
+                .Where(u => (!u.IsTheorem) && (u.Presence == UserModel.PresenceKind.Online))
+                .ToList();
+            if (isUserListEqual(relay.CurrentAttendanceSessionUsers, updatedAttendance))
+            {
+                return;
+            }
+            if (relay.CurrentAttendanceSessionUsers.Count > 0)
+            {
+                await updateAttendanceSessionAsync(relay, updatedAttendance);
+            }
+            else
+            {
+                await startNewAttendanceSessionAsync(relay, updatedAttendance);
+            }
+        }
+
+        private async Task startNewAttendanceSessionAsync(RelayChannel relay, List<UserModel> users)
+        {
+            relay.TotalAttendanceSessionUsers.Clear();
+            relay.AttendanceSessionStarted = DateTimeOffset.Now;
+            updateRelayAttendance(relay, users);
+            var attendanceString = string.Join(", ", users.Select(u => u.DisplayName));
+            var messageBody = $"{relay.AttendancePrefix} {attendanceString}";
+            var messageModel = new ChatMessageModel()
+            {
+                Body = messageBody
+            };
+            var messageId = await relay.ToChatService
+                .SendMessageToChannelIdAsync(relay.ToChannelId, messageModel);
+            relay.AttendanceSessionMessageId = messageId;
+        }
+
+        private async Task updateAttendanceSessionAsync(RelayChannel relay, List<UserModel> users)
+        {
+            updateRelayAttendance(relay, users);
+            if (users.Count == 0)
+            {
+                await endAttendanceSessionAsync(relay);
+                return;
+            }
+
+            var attendanceString = string.Join(", ", users.Select(u => u.DisplayName));
+            var messageBody = $"{relay.AttendancePrefix} {attendanceString}";
+            var messageModel = new ChatMessageModel()
+            {
+                Body = messageBody
+            };
+            relay.AttendanceSessionMessageId = await relay.ToChatService
+                .UpdateMessageAsync(relay.ToChannelId, relay.AttendanceSessionMessageId,
+                    messageModel);
+        }
+
+        private async Task endAttendanceSessionAsync(RelayChannel relay)
+        {
+            // Edit the original message to mark when the call started,
+            var startedMessageModel = new ChatMessageModel()
+            {
+                Body = relay.AttendanceStarted
+            };
+            await relay.ToChatService
+                .UpdateMessageAsync(relay.ToChannelId, relay.AttendanceSessionMessageId,
+                    startedMessageModel);
+
+            // ... and post a new message to show when the call ended.
+            var duration = DateTimeOffset.Now - relay.AttendanceSessionStarted;
+            var durationStr = duration.ToString("h'h 'm'm 's's'");
+            var totalAttendanceStr = string.Join(", ",
+                relay.TotalAttendanceSessionUsers.Select(u => u.DisplayName));
+            var messageBody = $"{relay.AttendanceEndedPrefix} Duration: {durationStr}, " + 
+                $"Participants: {totalAttendanceStr}";
+            var messageModel = new ChatMessageModel()
+            {
+                Body = messageBody
+            };
+            await relay.ToChatService
+                .SendMessageToChannelIdAsync(relay.ToChannelId, messageModel);
+
+            relay.AttendanceSessionStarted = DateTimeOffset.MinValue;
+            relay.AttendanceSessionMessageId = "";
+            relay.CurrentAttendanceSessionUsers.Clear();
+            relay.TotalAttendanceSessionUsers.Clear();
+        }
+
+        private void updateRelayAttendance(RelayChannel relay, List<UserModel> users)
+        {
+            foreach (var user in users)
+            {
+                if (!(relay.TotalAttendanceSessionUsers.Any(u => (u.Id == user.Id))))
+                {
+                    relay.TotalAttendanceSessionUsers.Add(user);
+                }
+            }
+            relay.CurrentAttendanceSessionUsers = users;
+        }
+
+        private bool isUserListEqual(IList<UserModel> first, IList<UserModel> second)
+        {
+            if (first.Count != second.Count)
+            {
+                return false;
+            }
+            var firstIds = first.Select(u => u.Id).ToHashSet();
+            var secondIds = second.Select(u => u.Id).ToHashSet();
+            foreach(var id in firstIds)
+            {
+                if (!secondIds.Contains(id))
+                {
+                    return false;
+                }
+            }
+            foreach(var id in secondIds)
+            {
+                if (!firstIds.Contains(id))
+                {
+                    return false;
+                }
+            }
+            return true;
         }
 
         public MiddlewareResult ProcessMessage(ChatMessageModel message)
@@ -200,16 +335,20 @@ namespace Theorem.Middleware
                     // replay this message to the destination
                     if (relay.IsActive)
                     {
-                        var messageDisplayName = message.
-                            FromChatServiceConnection.
-                            Users.
-                            Single(u => u.Id == message.AuthorId)
-                            .Name;
+                        string displayName = message.AuthorId;
+                        if (message.AuthorAlias.Length > 0)
+                        {
+                            displayName = message.AuthorAlias;
+                        }
+                        if (message.AuthorDisplayName.Length > 0)
+                        {
+                            displayName = message.AuthorDisplayName;
+                        }
                         relay.ToChatService.SendMessageToChannelIdAsync(
                             relay.ToChannelId,
                             new ChatMessageModel()
                             {
-                                Body = $"{relay.ChatPrefix}{messageDisplayName}: {message.Body}",
+                                Body = $"{relay.ChatPrefix}{displayName}: {message.Body}",
                                 Attachments = message.Attachments?.ToList(),
                             });
                     }

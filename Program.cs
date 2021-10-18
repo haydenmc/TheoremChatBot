@@ -4,7 +4,6 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Autofac;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Theorem.ChatServices;
@@ -73,13 +72,6 @@ namespace Theorem
                 .RegisterGeneric(typeof(Logger<>))
                 .As(typeof(ILogger<>))
                 .SingleInstance();
-            
-            // SQLite database
-            var dbFileName = Configuration.GetValue<string>("Database", "Theorem.db");
-            _logger.LogInformation("Registering database context with file {file}...", dbFileName);
-            containerBuilder
-                .Register(c => new TheoremDbContext(dbFileName))
-                .InstancePerDependency();
 
             // Middleware
             registerMiddleware(containerBuilder);
@@ -94,12 +86,6 @@ namespace Theorem
             _iocContainer = containerBuilder.Build();
             using (var scope = _iocContainer.BeginLifetimeScope())
             {
-                // Trigger database migrations
-                using (var db = scope.Resolve<TheoremDbContext>())
-                {
-                    db.Database.Migrate();
-                }
-                
                 // Connect to chat providers!
                 var chatServices = scope.Resolve<IEnumerable<IChatServiceConnection>>();
                 await Task.WhenAll(
