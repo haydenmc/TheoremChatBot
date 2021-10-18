@@ -31,7 +31,7 @@ namespace Theorem.Middleware
             _chatServiceConnectionMiddlewares = chatServiceConnectionMiddlewares;
             foreach (var chatServiceConnection in _chatServiceConnections)
             {
-                chatServiceConnection.NewMessage += NewMessage;
+                chatServiceConnection.MessageReceived += NewMessage;
             }
         }
 

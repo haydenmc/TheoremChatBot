@@ -22,7 +22,6 @@ namespace Theorem.Middleware
             public IChatServiceConnection ToChatService;
             public string ToChannelName;
             public string ToChannelId;
-            public string AttendancePrefix;
             public string ChatPrefix;
             public bool RelayChat;
             public bool RelayAttendance;
@@ -69,7 +68,6 @@ namespace Theorem.Middleware
                 var fromChannelName      = relayConfig.GetValue<string>("FromChannelName");
                 var toChatServiceName    = relayConfig.GetValue<string>("ToChatServiceName");
                 var toChannelName        = relayConfig.GetValue<string>("ToChannelName");
-                var attendancePrefix     = relayConfig.GetValue<string>("AttendancePrefix");
                 var chatPrefix           = relayConfig.GetValue<string>("ChatPrefix");
                 var relayChat            = relayConfig.GetValue<bool>  ("RelayChat");
                 var relayAttendance      = relayConfig.GetValue<bool>  ("RelayAttendance");
@@ -94,7 +92,6 @@ namespace Theorem.Middleware
                         FromChannelName  = fromChannelName,
                         ToChatService    = toChatService,
                         ToChannelName    = toChannelName,
-                        AttendancePrefix = attendancePrefix,
                         ChatPrefix       = chatPrefix,
                         RelayChat        = relayChat,
                         RelayAttendance  = relayAttendance,
@@ -150,10 +147,10 @@ namespace Theorem.Middleware
                     if (relay.RelayAttendance)
                     {
                         // Send first update
-                        onlineUsersChanged(relay.FromChatService);
+                        channelsUpdated(relay.FromChatService, relay.FromChatService.Channels);
                         // Subscribe to future updates
-                        relay.FromChatService.OnlineUsers.CollectionChanged += 
-                            (s, a) => onlineUsersChanged(relay.FromChatService);
+                        relay.FromChatService.ChannelsUpdated += 
+                            (_, channels) => channelsUpdated(relay.FromChatService, channels);
                     }
 
                     relay.IsActive = true;
@@ -161,33 +158,35 @@ namespace Theorem.Middleware
             }
         }
 
-        private async void onlineUsersChanged(IChatServiceConnection chatServiceConnection)
+        private void channelsUpdated(IChatServiceConnection chatServiceConnection,
+            ICollection<ChannelModel> channels)
         {
-            var attendanceString = 
-                String.Join(", ", chatServiceConnection.OnlineUsers.Select(u => u.Name));
-            _logger.LogInformation("Users changed for {service}: {attendance}",
-                chatServiceConnection.Name,
-                attendanceString);
-            var relays = _relays.Where(c => 
-                c.RelayAttendance && 
-                (c.FromChatService == chatServiceConnection));
-            foreach (var relay in relays)
-            {
-                if (relay.ToChannelId != null)
-                {
-                    await relay.ToChatService.SendMessageToChannelIdAsync(
-                        relay.ToChannelId,
-                        new ChatMessageModel()
-                        {
-                            Body = $"{relay.AttendancePrefix}{attendanceString}",
-                            Attachments = null,
-                        });
-                    _logger.LogInformation("Set topic for {service}: {channel}:{id}",
-                        relay.ToChatService.Name,
-                        relay.ToChannelName,
-                        relay.ToChannelId);
-                }
-            }
+            // TODO
+            // var attendanceString = 
+            //     String.Join(", ", chatServiceConnection.OnlineUsers.Select(u => u.Name));
+            // _logger.LogInformation("Users changed for {service}: {attendance}",
+            //     chatServiceConnection.Name,
+            //     attendanceString);
+            // var relays = _relays.Where(c => 
+            //     c.RelayAttendance && 
+            //     (c.FromChatService == chatServiceConnection));
+            // foreach (var relay in relays)
+            // {
+            //     if (relay.ToChannelId != null)
+            //     {
+            //         await relay.ToChatService.SendMessageToChannelIdAsync(
+            //             relay.ToChannelId,
+            //             new ChatMessageModel()
+            //             {
+            //                 Body = $"{relay.AttendancePrefix}{attendanceString}",
+            //                 Attachments = null,
+            //             });
+            //         _logger.LogInformation("Set topic for {service}: {channel}:{id}",
+            //             relay.ToChatService.Name,
+            //             relay.ToChannelName,
+            //             relay.ToChannelId);
+            //     }
+            // }
         }
 
         public MiddlewareResult ProcessMessage(ChatMessageModel message)
@@ -205,14 +204,6 @@ namespace Theorem.Middleware
                     if (relay.IsActive)
                     {
                         string displayName = message.AuthorId;
-                        var messageUser = message.
-                            FromChatServiceConnection.
-                            Users.
-                            SingleOrDefault(u => u.Id == message.AuthorId);
-                        if (messageUser != null)
-                        {
-                            displayName = messageUser.Name;
-                        }
                         relay.ToChatService.SendMessageToChannelIdAsync(
                             relay.ToChannelId,
                             new ChatMessageModel()

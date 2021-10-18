@@ -23,10 +23,16 @@ namespace Theorem.Models.Matrix
 
                     return typeValue switch
                     {
-                        "m.room.message" => JsonSerializer
-                            .Deserialize<MatrixRoomMessageEvent>(rootElement, options),
+                        "m.room.canonical_alias" => JsonSerializer
+                            .Deserialize<MatrixRoomCanonicalAliasEvent>(rootElement, options),
+                        "m.room.create" => JsonSerializer
+                            .Deserialize<MatrixRoomCreateEvent>(rootElement, options),
                         "m.room.member" => JsonSerializer
                             .Deserialize<MatrixRoomMemberEvent>(rootElement, options),
+                        "m.room.message" => JsonSerializer
+                            .Deserialize<MatrixRoomMessageEvent>(rootElement, options),
+                        "m.room.name" => JsonSerializer
+                            .Deserialize<MatrixRoomNameEvent>(rootElement, options),
                         _ => new MatrixEvent() { Type = typeValue },
                     };
                 }
@@ -71,19 +77,49 @@ namespace Theorem.Models.Matrix
         public string RoomId { get; init; }
     }
 
-    public record MatrixRoomMessageEvent : MatrixRoomEvent
+    public record MatrixRoomCanonicalAliasEvent : MatrixRoomEvent
     {
         [JsonPropertyName("content")]
-        public MatrixRoomMessageEventContent Content { get; init; }
+        public MatrixRoomCanonicalAliasEventContent Content { get; init; }
     }
 
-    public record MatrixRoomMessageEventContent
+    public record MatrixRoomCanonicalAliasEventContent
     {
-        [JsonPropertyName("body")]
-        public string Body { get; init; }
+        [JsonPropertyName("alias")]
+        public string RoomAlias { get; init; }
 
-        [JsonPropertyName("msgtype")]
-        public string MessageType { get; init; }
+        [JsonPropertyName("alt_aliases")]
+        public string[] AlternateRoomAliases { get; init; }
+    }
+
+    public record MatrixRoomCreateEvent : MatrixRoomEvent
+    {
+        [JsonPropertyName("content")]
+        public MatrixRoomCreateEventContent Content { get; init; }
+    }
+
+    public record MatrixRoomCreateEventContent
+    {
+        [JsonPropertyName("creator")]
+        public string CreatorId { get; init; }
+
+        [JsonPropertyName("m.federate")]
+        public bool CanFederate { get; init; }
+
+        [JsonPropertyName("room_version")]
+        public string RoomVersion { get; init; }
+
+        [JsonPropertyName("predecessor")]
+        public MatrixPreviousRoom PreviousRoom { get; init; }
+    }
+
+    public record MatrixPreviousRoom
+    {
+        [JsonPropertyName("room_id")]
+        public string RoomId { get; init; }
+
+        [JsonPropertyName("event_id")]
+        public string LastRoomEventId { get; init; }
     }
 
     public record MatrixRoomMemberEvent : MatrixRoomEvent
@@ -112,5 +148,32 @@ namespace Theorem.Models.Matrix
         public bool IsDirect { get; init; }
 
         // Additional fields 
+    }
+
+    public record MatrixRoomMessageEvent : MatrixRoomEvent
+    {
+        [JsonPropertyName("content")]
+        public MatrixRoomMessageEventContent Content { get; init; }
+    }
+
+    public record MatrixRoomMessageEventContent
+    {
+        [JsonPropertyName("body")]
+        public string Body { get; init; }
+
+        [JsonPropertyName("msgtype")]
+        public string MessageType { get; init; }
+    }
+
+    public record MatrixRoomNameEvent : MatrixRoomEvent
+    {
+        [JsonPropertyName("content")]
+        public MatrixRoomNameEventContent Content { get; init; }
+    }
+
+    public record MatrixRoomNameEventContent
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; init; }
     }
 }

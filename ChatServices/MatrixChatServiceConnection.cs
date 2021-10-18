@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -38,16 +39,29 @@ namespace Theorem.ChatServices
             }
         }
 
-        public string UserName => "";
+        public string UserName
+        {
+            get
+            {
+                return _username;
+            }
+        }
 
-        public ObservableCollection<UserModel> Users => new ObservableCollection<UserModel>();
-
-        public ObservableCollection<UserModel> OnlineUsers => new ObservableCollection<UserModel>();
+        public ICollection<ChannelModel> Channels
+        {
+            get
+            {
+                return _channels;
+            }
+        }
 
         public bool IsConnected { get; private set; } = false;
 
         public event EventHandler<EventArgs> Connected;
-        public event EventHandler<ChatMessageModel> NewMessage;
+
+        public event EventHandler<ChatMessageModel> MessageReceived;
+
+        public event EventHandler<ICollection<ChannelModel>> ChannelsUpdated;
 
         private const int POLLING_TIMEOUT_MS = 30000;
 
@@ -82,6 +96,8 @@ namespace Theorem.ChatServices
         private int _nextTxnId = 0;
 
         private HttpClient _httpClient;
+
+        private List<ChannelModel> _channels = new List<ChannelModel>();
 
         public MatrixChatServiceConnection(ConfigurationSection configuration,
             ILogger<MatrixChatServiceConnection> logger)
@@ -129,15 +145,11 @@ namespace Theorem.ChatServices
             return response.RoomId;
         }
 
-        public Task<int> GetMemberCountFromChannelIdAsync(string channelId)
+        public async Task<string> SendMessageToChannelIdAsync(string channelId,
+            ChatMessageModel message)
         {
-            // TODO
-            return Task.FromResult<int>(0);
-        }
-
-        public async Task SendMessageToChannelIdAsync(string channelId, ChatMessageModel message)
-        {
-            await sendTextMessageToRoomAsync(channelId, message.Body);
+            var eventResponse = await sendTextMessageToRoomAsync(channelId, message.Body);
+            return eventResponse.EventId;
         }
 
         public Task SetChannelTopicAsync(string channelId, string topic)
@@ -197,7 +209,6 @@ namespace Theorem.ChatServices
         {
             // https://matrix.org/docs/spec/client_server/latest#id257
             var result = await _httpClient.GetAsync("/_matrix/client/r0/sync");
-
             if (result.StatusCode != HttpStatusCode.OK)
             {
                 var error = await result.Content.ReadFromJsonAsync<MatrixError>();
@@ -231,7 +242,6 @@ namespace Theorem.ChatServices
             // https://matrix.org/docs/spec/client_server/latest#id290
             var result = await _httpClient.PostAsync(
                 $"/_matrix/client/r0/rooms/{HttpUtility.UrlEncode(roomId)}/join", null);
-
             if (result.StatusCode != HttpStatusCode.OK)
             {
                 var error = await result.Content.ReadFromJsonAsync<MatrixError>();
@@ -249,7 +259,6 @@ namespace Theorem.ChatServices
             var result = await _httpClient.GetAsync(
                 $"/_matrix/client/r0/sync?since={HttpUtility.UrlEncode(_nextSyncBatchToken)}" + 
                 $"&timeout={POLLING_TIMEOUT_MS}");
-
             if (result.StatusCode != HttpStatusCode.OK)
             {
                 var error = await result.Content.ReadFromJsonAsync<MatrixError>();
@@ -279,6 +288,14 @@ namespace Theorem.ChatServices
                         }
                     }
                 }
+            }
+        }
+
+        private void updateChannels(MatrixSyncResponse syncResponse)
+        {
+            if (syncResponse.Rooms?.JoinedRooms != null)
+            {
+                
             }
         }
 
@@ -340,10 +357,21 @@ namespace Theorem.ChatServices
 
         private void onNewMessage(ChatMessageModel message)
         {
-            var eventHandler = NewMessage;
+            var eventHandler = MessageReceived;
             if (eventHandler != null)
             {
                 eventHandler(this, message);
+            }
+        }
+
+        protected virtual void onChannelsUpdated()
+        {
+            var eventHandler = ChannelsUpdated;
+            if (eventHandler != null)
+            {
+                // Create a shallow copy of our list
+                var channelList = _channels.ToList();
+                eventHandler(this, channelList);
             }
         }
     }

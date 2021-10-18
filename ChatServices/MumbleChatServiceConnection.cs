@@ -1,8 +1,5 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Security;
@@ -22,8 +19,7 @@ using Version = Theorem.Models.Mumble.MumbleProto.Version;
 
 namespace Theorem.ChatServices
 {
-    public class MumbleChatServiceConnection :
-        IChatServiceConnection
+    public class MumbleChatServiceConnection : IChatServiceConnection
     {
         /// <summary>
         /// Configuration object for retrieving configuration values
@@ -68,22 +64,19 @@ namespace Theorem.ChatServices
             }
         }
 
-        /// <summary>
-        /// Collection of users present on this chat service connection
-        /// </summary>
-        public ObservableCollection<UserModel> Users { get; private set; }
-            = new ObservableCollection<UserModel>();
-
-        /// <summary>
-        /// Collection of users currently online on this chat service connection
-        /// </summary>
-        public ObservableCollection<UserModel> OnlineUsers
+        public ICollection<ChannelModel> Channels
         {
             get
             {
-                return Users;
+                return _channels;
             }
         }
+
+        public event EventHandler<EventArgs> Connected;
+
+        public event EventHandler<ChatMessageModel> MessageReceived;
+
+        public event EventHandler<ICollection<ChannelModel>> ChannelsUpdated;
 
         /// <summary>
         /// Whether or not we are currently connected to the chat service
@@ -162,24 +155,23 @@ namespace Theorem.ChatServices
 
         private uint _mumbleSessionId;
 
-        public event EventHandler<EventArgs> Connected;
-        public event EventHandler<ChatMessageModel> NewMessage;
+        private List<ChannelModel> _channels = new List<ChannelModel>();
 
-        public async Task<string> GetChannelIdFromChannelNameAsync(string channelName)
+        public Task<string> GetChannelIdFromChannelNameAsync(string channelName)
         {
             var matchingChannel = 
                 _mumbleChannels.Values.SingleOrDefault(c => c.Name == channelName);
             if (matchingChannel != null)
             {
-                return matchingChannel.ChannelId.ToString();
+                return Task.FromResult(matchingChannel.ChannelId.ToString());
             }
             else
             {
-                return "";
+                return Task.FromResult("");
             }
         }
 
-        public async Task SendMessageToChannelIdAsync(string channelId, ChatMessageModel message)
+        public async Task<string> SendMessageToChannelIdAsync(string channelId, ChatMessageModel message)
         {
             string messageText = message.Body;
             
@@ -192,7 +184,8 @@ namespace Theorem.ChatServices
             foreach (Match match in urlMatches.OrderByDescending(u => u.Index))
             {
                 var url = HttpUtility.HtmlAttributeEncode(match.Value);
-                messageText = messageText.Substring(0, match.Index) + $"<a href=\"{url}\">{match.Value}</a>" + 
+                messageText = messageText.Substring(0, match.Index) +
+                    $"<a href=\"{url}\">{match.Value}</a>" +
                     messageText.Substring(match.Index + match.Length);
             }
 
@@ -213,6 +206,7 @@ namespace Theorem.ChatServices
                 Message = messageText
             };
             await sendAsync<TextMessage>(PacketType.TextMessage, textMessage);
+            return ""; // Mumble does not assign IDs to messages
         }
 
         /// <summary>
@@ -228,7 +222,7 @@ namespace Theorem.ChatServices
         public async Task StartAsync()
         {
             // Clear out our members
-            Users.Clear();
+            _channels.Clear();
             _mumbleUsers.Clear();
             _mumbleChannels.Clear();
 
@@ -242,8 +236,10 @@ namespace Theorem.ChatServices
             _sslStream = new SslStream(
                 networkStream,
                 false,
-                (object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors errors) => true,
-                (object sender, string targetHost, X509CertificateCollection localCertificates, X509Certificate remoteCertificate, string[] acceptableIssuers) => null);
+                (object sender, X509Certificate certificate, X509Chain chain,
+                    SslPolicyErrors errors) => true,
+                (object sender, string targetHost, X509CertificateCollection localCertificates,
+                    X509Certificate remoteCertificate, string[] acceptableIssuers) => null);
             await _sslStream.AuthenticateAsClientAsync(_serverHostname);
             _streamWriteSemaphor = new SemaphoreSlim(1, 1);
 
@@ -269,7 +265,8 @@ namespace Theorem.ChatServices
                 });
 
             // We need to send pings every so often, otherwise the server disconnects us
-            var pingTimer = new System.Threading.Timer(async (state) => await sendPingAsync(), null, 5000, 5000);
+            var pingTimer = new System.Threading.Timer(async (state) => await sendPingAsync(),
+                null, 5000, 5000);
 
             // Now just read incoming data forever
             try
@@ -369,6 +366,7 @@ namespace Theorem.ChatServices
                 _logger.LogInformation($"Received updated channel state for " + 
                     $"'{cachedChannelState.Name}'.");
             }
+            updateChannelStore();
         }
 
         private void processChannelRemove(ChannelRemove channelRemove)
@@ -383,6 +381,7 @@ namespace Theorem.ChatServices
                 _logger.LogInformation($"Received channel removal for ID " + 
                     $"'{channelRemove.ChannelId}'.");
             }
+            updateChannelStore();
         }
 
         private void processUserState(UserState userState)
@@ -391,31 +390,22 @@ namespace Theorem.ChatServices
             {
                 _mumbleUsers[userState.Session] = userState;
                 _logger.LogInformation($"Received new user state for '{userState.Name}'.");
-                this.Users.Add(new UserModel
-                {
-                    FromChatServiceConnection = this,
-                    Id = userState.Session.ToString(),
-                    DisplayName = userState.Name,
-                    Name = userState.Name,
-                    Provider = ChatServiceKind.Mumble,
-                });
             }
             else
             {
                 var cachedUserState = _mumbleUsers[userState.Session];
-                var cachedUserModel = 
-                    Users.SingleOrDefault(u => u.Id == userState.Session.ToString());
                 if (userState.ShouldSerializeName())
                 {
                     cachedUserState.Name = userState.Name;
-                    cachedUserModel.Name = userState.Name;
                 }
                 if (userState.ShouldSerializeChannelId())
                 {
                     cachedUserState.ChannelId = userState.ChannelId;
                 }
-                _logger.LogInformation($"Received updated user state for '{cachedUserState.Name}'.");
+                _logger.LogInformation("Received updated user state for " +
+                    $"'{cachedUserState.Name}'.");
             }
+            updateChannelStore();
         }
 
         private void processUserRemove(UserRemove userRemove)
@@ -430,18 +420,13 @@ namespace Theorem.ChatServices
                 _logger.LogInformation($"Received user removal for session ID " + 
                     $"'{userRemove.Session}'.");
             }
-            var cachedUserModel = Users.SingleOrDefault(u => u.Id == userRemove.Session.ToString());
-            if (cachedUserModel != null)
-            {
-                Users.Remove(cachedUserModel);
-            }
+            updateChannelStore();
         }
 
         private void processTextMessage(TextMessage textMessage)
         {
             // Hackily strip any yucky HTML that mumble inserts...
             textMessage.Message = Regex.Replace(textMessage.Message, "<[^>]*(>|$)", string.Empty);
-
             if (textMessage.ChannelIds == null)
             {
                 var message = new ChatMessageModel
@@ -548,13 +533,54 @@ namespace Theorem.ChatServices
                 byte[] packetTypeBytes = 
                     BitConverter.GetBytes(IPAddress.HostToNetworkOrder((short)type));
                 await _sslStream.WriteAsync(packetTypeBytes, 0, packetTypeBytes.Length);
-                Serializer.SerializeWithLengthPrefix<T>(_sslStream, packet, PrefixStyle.Fixed32BigEndian);
+                Serializer.SerializeWithLengthPrefix<T>(_sslStream, packet,
+                    PrefixStyle.Fixed32BigEndian);
                 await _sslStream.FlushAsync();
             }
             finally
             {
                 _streamWriteSemaphor.Release();
             }
+        }
+
+        private void updateChannelStore()
+        {
+            var channelModelsById = new Dictionary<uint, ChannelModel>();
+            foreach (var channel in _mumbleChannels.Values)
+            {
+                var channelModel = new ChannelModel()
+                {
+                    Id = channel.ChannelId.ToString(),
+                    Alias = channel.Name,
+                    DisplayName = channel.Name,
+                    Users = new List<UserModel>(),
+                };
+                channelModelsById[channel.ChannelId] = channelModel;
+            }
+
+            foreach (var user in _mumbleUsers.Values)
+            {
+                var userModel = new UserModel()
+                {
+                    Id = user.Session.ToString(),
+                    Provider = ChatServiceKind.Mumble,
+                    Alias = user.Name,
+                    DisplayName = user.Name,
+                    Presence = UserModel.PresenceKind.Online,
+                    FromChatServiceConnection = this,
+                };
+                if (channelModelsById.ContainsKey(user.ChannelId))
+                {
+                    channelModelsById[user.ChannelId].Users.Add(userModel);
+                }
+                else
+                {
+                    _logger.LogWarning($"Couldn't find channel {user.ChannelId} for Mumble user " +
+                        $"{user.UserId} / {user.Name}.");
+                }
+            }
+            _channels = channelModelsById.Values.ToList();
+            onChannelsUpdated();
         }
 
         /// <summary>
@@ -575,22 +601,29 @@ namespace Theorem.ChatServices
         /// <param name="message">Event arguments; the message that was received</param>
         protected virtual void onNewMessage(ChatMessageModel message)
         {
-            var eventHandler = NewMessage;
+            var eventHandler = MessageReceived;
             if (eventHandler != null)
             {
                 eventHandler(this, message);
             }
         }
 
-        public async Task SetChannelTopicAsync(string channelId, string topic)
+        protected virtual void onChannelsUpdated()
         {
-            // TODO
+            var eventHandler = ChannelsUpdated;
+            if (eventHandler != null)
+            {
+                // Create a shallow copy of our list
+                var channelList = _channels.ToList();
+                eventHandler(this, channelList);
+            }
         }
 
-        public async Task<int> GetMemberCountFromChannelIdAsync(string channelId)
+        public Task SetChannelTopicAsync(string channelId, string topic)
         {
-            // TODO
-            return 0;
+            _logger.LogWarning("Attempted to set Mumble channel topic, but Mumble does not " + 
+                "support channel topics.");
+            return Task.CompletedTask;
         }
     }
 }
