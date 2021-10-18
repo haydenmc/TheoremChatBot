@@ -4,7 +4,6 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Autofac;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Theorem.ChatServices;
