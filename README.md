@@ -9,16 +9,13 @@ More docs later. I'm just using this to store some useful info.
 ```json
 {
     "ChatServiceConnections": {
-        "WarmItUpMattermost": {
-            "Service": "Mattermost",
-            "ServerHostname": "chat.myserver.com",
-            "AccessToken": "youraccesstokenhere",
+        "WarmItUpMatrix": {
+            "Service": "Matrix",
+            "BaseUrl": "https://your.service",
+            "UserName": "theorem",
+            "Password": "PASSWORD",
+            "RoomServerRestriction": "your.service",
             "Middleware": [ "Echo", "EzFtlStreamAnnouncement" ]
-        },
-        "WarmItUpSlack": {
-            "Service": "Slack",
-            "ApiToken": "yourapitokenhere",
-            "Middleware": [ "Echo" ]
         },
         "WarmItUpMumble": {
             "Service": "Mumble",
@@ -55,8 +52,8 @@ More docs later. I'm just using this to store some useful info.
         },
         "EzFtlStreamAnnouncement": {
             "Enabled": true,
-            "Hostname": "myezftlinstance.tv",
-            "Port": 80,
+            "BaseUrl": "https://myezftlinstance.tv",
+            "WebSocketUrl": "wss://myezftlinstance.tv/ws",
             "AnnounceChannels": [
                 {
                     "ChatServiceName": "WarmItUpMattermost",
