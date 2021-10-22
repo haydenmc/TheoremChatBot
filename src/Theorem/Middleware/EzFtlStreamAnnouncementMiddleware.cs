@@ -46,19 +46,19 @@ namespace Theorem.Middleware
         private HashSet<UInt64> _currentlyStreamingChannelIds =
             new HashSet<UInt64>();
 
-        private string _hostname
+        private string _baseUrl
         {
             get
             {
-                return _configuration.GetValue<string>("Hostname");
+                return _configuration.GetValue<string>("BaseUrl");
             }
         }
 
-        private string _port
+        private string _webSocketUrl
         {
             get
             {
-                return _configuration.GetValue<string>("Port");
+                return _configuration.GetValue<string>("WebSocketUrl");
             }
         }
 
@@ -122,9 +122,7 @@ namespace Theorem.Middleware
         {
             _logger.LogInformation("Connecting to EzFtl service...");
             var webSocketClient = new ClientWebSocket();
-            await webSocketClient.ConnectAsync(
-                new Uri($"ws://{_hostname}:{_port}/ws"),
-                CancellationToken.None);
+            await webSocketClient.ConnectAsync(new Uri(_webSocketUrl), CancellationToken.None);
             _logger.LogInformation("Connected to EzFtl!");
             await receive(webSocketClient);
         }
@@ -182,7 +180,7 @@ namespace Theorem.Middleware
                     new ChatMessageModel()
                     {
                         Body = $"🎥 '{channel.ChannelName}' has started! " + 
-                            $"http://{_hostname}/{channel.ChannelId}",
+                            $"{_baseUrl}/{channel.ChannelId}",
                     });
             }
         }
