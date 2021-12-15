@@ -337,6 +337,7 @@ namespace Theorem.ChatServices
         {
             if (syncResponse.Rooms?.JoinedRooms != null)
             {
+                _channels.Clear();
                 foreach (var room in syncResponse.Rooms.JoinedRooms)
                 {
                     var roomId = room.Key;
