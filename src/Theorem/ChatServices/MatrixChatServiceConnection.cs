@@ -390,6 +390,35 @@ namespace Theorem.ChatServices
 
         private void processRoomMessage(string roomId, MatrixRoomMessageEvent message)
         {
+            string body = "";
+            List<AttachmentModel> attachments = new List<AttachmentModel>();
+            if (message.Content is MatrixRoomMessageEventTextContent)
+            {
+                body = (message.Content as MatrixRoomMessageEventTextContent).Body;
+            }
+            else if (message.Content is MatrixRoomMessageEventImageContent)
+            {
+                var imageContent = message.Content as MatrixRoomMessageEventImageContent;
+
+                // Reconstruct download URL from MXC URI as per
+                // https://spec.matrix.org/v1.3/client-server-api/#get_matrixmediav3downloadservernamemediaidfilename
+                var mxcUrl = new Uri(imageContent.Url);
+                string attachmentUrl = $"{_serverBaseUrl}/_matrix/media/v3/download/" +
+                    $"{mxcUrl.Host}{mxcUrl.LocalPath}/file";
+
+                attachments.Add(new AttachmentModel()
+                {
+                    Kind = AttachmentKind.Image,
+                    Name = imageContent.Body,
+                    Uri = attachmentUrl,
+                });
+            }
+            else
+            {
+                _logger.LogInformation($"Ignoring message type '{message.Content.MessageType}'");
+                return;
+            }
+
             string alias = message.Sender;
             string displayName = message.Sender;
             var channel = _channels.SingleOrDefault(c => (c.Id == roomId));
@@ -407,12 +436,12 @@ namespace Theorem.ChatServices
                 AuthorId = message.Sender,
                 AuthorAlias = alias,
                 AuthorDisplayName = displayName,
-                Body = message.Content?.Body,
+                Body = body,
                 ChannelId = roomId,
                 TimeSent = DateTimeOffset.FromUnixTimeMilliseconds(
                     (long)message.OriginServerTimestamp),
                 ThreadingId = "",
-                Attachments = null,
+                Attachments = attachments,
                 FromChatServiceConnection = this,
                 IsFromTheorem = (message.Sender.Equals(_userId)),
                 IsMentioningTheorem = false,

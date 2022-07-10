@@ -150,21 +150,6 @@ namespace Theorem.Models.Matrix
         // Additional fields 
     }
 
-    public record MatrixRoomMessageEvent : MatrixRoomEvent
-    {
-        [JsonPropertyName("content")]
-        public MatrixRoomMessageEventContent Content { get; init; }
-    }
-
-    public record MatrixRoomMessageEventContent
-    {
-        [JsonPropertyName("body")]
-        public string Body { get; init; }
-
-        [JsonPropertyName("msgtype")]
-        public string MessageType { get; init; }
-    }
-
     public record MatrixRoomNameEvent : MatrixRoomEvent
     {
         [JsonPropertyName("content")]
