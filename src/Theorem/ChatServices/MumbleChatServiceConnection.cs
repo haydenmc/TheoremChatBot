@@ -1,7 +1,10 @@
 using System;
+using System.Buffers.Text;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
@@ -12,6 +15,8 @@ using System.Web;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using ProtoBuf;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Processing;
 using Theorem.Models;
 using Theorem.Models.Mumble;
 using Theorem.Models.Mumble.MumbleProto;
@@ -194,9 +199,15 @@ namespace Theorem.ChatServices
             {
                 foreach (var attachment in message.Attachments)
                 {
+                    // Try to get a cute little thumbnail
+                    var imageThumbnailBase64 = await getBase64ImagePreviewAsync(
+                        new Uri(attachment.Uri));
+                    var encodedBase64Uri = "data:image/jpeg;base64," + 
+                        $"{HttpUtility.HtmlAttributeEncode(imageThumbnailBase64)}";
                     var encodedName = HttpUtility.HtmlEncode(attachment.Name);
                     var encodedUri = HttpUtility.HtmlAttributeEncode(attachment.Uri);
-                    messageText += $"<br /><a href=\"{encodedUri}\">{encodedName}</a>";
+                    messageText += $"<br /><img src=\"{encodedBase64Uri}\" /><br />" +
+                        $"<a href=\"{encodedUri}\">{encodedName}</a>";
                 }
             }
 
@@ -607,6 +618,22 @@ namespace Theorem.ChatServices
             }
             _channels = channelModelsById.Values.ToList();
             onChannelsUpdated();
+        }
+
+        private static async Task<string> getBase64ImagePreviewAsync(Uri imageUri)
+        {
+            using (var httpClient = new HttpClient())
+            using (var imageStream = await httpClient.GetStreamAsync(imageUri))
+            using (var image = await Image.LoadAsync(imageStream))
+            {
+                var targetWidth = 128;
+                var targetHeight = image.Height * (targetWidth / image.Width);
+                image.Mutate(i => i.Resize(targetWidth, targetHeight));
+
+                var thumbnailStream = new MemoryStream();
+                await image.SaveAsJpegAsync(thumbnailStream);
+                return Convert.ToBase64String(thumbnailStream.ToArray());
+            }
         }
 
         /// <summary>
