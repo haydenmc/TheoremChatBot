@@ -9,6 +9,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
 using Microsoft.Extensions.Configuration;
@@ -98,6 +99,8 @@ namespace Theorem.ChatServices
         private HttpClient _httpClient;
 
         private List<ChannelModel> _channels = new List<ChannelModel>();
+
+        private Regex _mentionRegex = null;
 
         public MatrixChatServiceConnection(ConfigurationSection configuration,
             ILogger<MatrixChatServiceConnection> logger)
@@ -242,6 +245,9 @@ namespace Theorem.ChatServices
             _deviceId = response.DeviceId;
             _accessToken = response.AccessToken;
             _userId = response.UserId;
+            _mentionRegex = new Regex(
+                $"<a href=\"https://matrix.to/#/{_userId}\">.+</a>",
+                RegexOptions.IgnoreCase);
             _httpClient.DefaultRequestHeaders.Authorization = 
                 new AuthenticationHeaderValue("Bearer", response.AccessToken);
         }
@@ -344,37 +350,45 @@ namespace Theorem.ChatServices
                     var roomAlias = roomId;
                     var roomName = roomId;
                     var members = new List<UserModel>();
-                    foreach (var roomEvent in room.Value.State.Events)
-                    {
-                        if (roomEvent is MatrixRoomCanonicalAliasEvent)
+
+                    // Per https://spec.matrix.org/v1.3/client-server-api/#syncing,
+                    // load `state` first to quickly sync to the server state,
+                    // then start processing `timeline` events.
+                    var updateRoomFromEvents = (IList<MatrixEvent> roomEvents) => {
+                        foreach (var roomEvent in roomEvents)
                         {
-                            roomAlias = 
-                                (roomEvent as MatrixRoomCanonicalAliasEvent).Content.RoomAlias;
-                        }
-                        if (roomEvent is MatrixRoomNameEvent)
-                        {
-                            roomName = (roomEvent as MatrixRoomNameEvent).Content.Name;
-                        }
-                        if (roomEvent is MatrixRoomMemberEvent)
-                        {
-                            var memberEvent = roomEvent as MatrixRoomMemberEvent;
-                            if (!memberEvent.Content.Membership.Equals("join",
-                                StringComparison.OrdinalIgnoreCase))
+                            if (roomEvent is MatrixRoomCanonicalAliasEvent)
                             {
-                                continue;
+                                roomAlias = 
+                                    (roomEvent as MatrixRoomCanonicalAliasEvent).Content.RoomAlias;
                             }
-                            var member = new UserModel()
+                            if (roomEvent is MatrixRoomNameEvent)
                             {
-                                Id = memberEvent.Sender,
-                                Provider = ChatServiceKind.Matrix,
-                                Alias = memberEvent.Sender,
-                                DisplayName = memberEvent.Content.DisplayName,
-                                Presence = UserModel.PresenceKind.Online,
-                                FromChatServiceConnection = this,
-                            };
-                            members.Add(member);
+                                roomName = (roomEvent as MatrixRoomNameEvent).Content.Name;
+                            }
+                            if (roomEvent is MatrixRoomMemberEvent)
+                            {
+                                var memberEvent = roomEvent as MatrixRoomMemberEvent;
+                                if (!memberEvent.Content.Membership.Equals("join",
+                                    StringComparison.OrdinalIgnoreCase))
+                                {
+                                    continue;
+                                }
+                                var member = new UserModel()
+                                {
+                                    Id = memberEvent.Sender,
+                                    Provider = ChatServiceKind.Matrix,
+                                    Alias = memberEvent.Sender,
+                                    DisplayName = memberEvent.Content.DisplayName,
+                                    Presence = UserModel.PresenceKind.Online,
+                                    FromChatServiceConnection = this,
+                                };
+                                members.Add(member);
+                            }
                         }
-                    }
+                    };
+                    updateRoomFromEvents(room.Value.State.Events);
+                    updateRoomFromEvents(room.Value.Timeline.Events);
                     
                     _channels.Add(new ChannelModel()
                     {
@@ -390,11 +404,21 @@ namespace Theorem.ChatServices
 
         private void processRoomMessage(string roomId, MatrixRoomMessageEvent message)
         {
+            string formattedBody = "";
             string body = "";
             List<AttachmentModel> attachments = new List<AttachmentModel>();
             if (message.Content is MatrixRoomMessageEventTextContent)
             {
-                body = (message.Content as MatrixRoomMessageEventTextContent).Body;
+                var content = (message.Content as MatrixRoomMessageEventTextContent);
+                if (content.Body != null)
+                {
+                    body = content.Body;
+                }
+                if (content.FormattedBody != null)
+                {
+                    formattedBody =
+                        (message.Content as MatrixRoomMessageEventTextContent).FormattedBody;
+                }
             }
             else if (message.Content is MatrixRoomMessageEventImageContent)
             {
@@ -444,7 +468,8 @@ namespace Theorem.ChatServices
                 Attachments = attachments,
                 FromChatServiceConnection = this,
                 IsFromTheorem = (message.Sender.Equals(_userId)),
-                IsMentioningTheorem = false,
+                IsMentioningTheorem = (_mentionRegex == null ?
+                    false : _mentionRegex.IsMatch(formattedBody)),
             };
             onNewMessage(messageModel);
         }

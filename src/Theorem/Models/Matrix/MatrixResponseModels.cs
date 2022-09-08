@@ -54,7 +54,7 @@ namespace Theorem.Models.Matrix
         [JsonPropertyName("rooms")]
         public MatrixSyncResponseRooms Rooms { get; init; }
 
-        // Additional fields @ https://matrix.org/docs/spec/client_server/latest#id257
+        // Additional fields @ https://spec.matrix.org/v1.3/client-server-api/#get_matrixclientv3sync
     }
 
     public record MatrixSyncResponseRooms
