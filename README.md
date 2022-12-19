@@ -75,6 +75,17 @@ More docs later. I'm just using this to store some useful info.
                     "Prefix": "Mumble: "
                 }
             ]
+        },
+        "Volunteering": {
+            "Enabled": true,
+            "PostChannels": [
+                {
+                    "ChatServiceName": "WarmItUpMatrix",
+                    "ChannelName": "#volunteering:warmitup.chat"
+                }
+            ],
+            "PostDayOfWeek": "Monday",
+            "PostTime": "08:00"
         }
     }
 }
