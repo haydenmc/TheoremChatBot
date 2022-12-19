@@ -242,8 +242,10 @@ namespace Theorem.Middleware
         {
             private HttpClient _httpClient = new HttpClient();
 
-            private static readonly TimeZoneInfo _timeZone =
-                TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+            private readonly TimeZoneInfo _timeZone =
+                TimeZoneInfo.GetSystemTimeZones().Any(t => (t.Id == "Pacific Standard Time"))
+                    ? TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time")
+                    : TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
 
             public async Task<IList<VolunteeringEvent>> GetVolunteeringEventsAsync(
                 DateTimeOffset startTime, DateTimeOffset endTime)
@@ -356,8 +358,10 @@ namespace Theorem.Middleware
         private class SeattleParksVolunteeringEventDataSource : IVolunteeringEventDataSource
         {
             private HttpClient _httpClient = new HttpClient();
-            private static readonly TimeZoneInfo _timeZone =
-                TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+            private readonly TimeZoneInfo _timeZone =
+                TimeZoneInfo.GetSystemTimeZones().Any(t => (t.Id == "Pacific Standard Time"))
+                    ? TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time")
+                    : TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
 
             public async Task<IList<VolunteeringEvent>> GetVolunteeringEventsAsync(
                 DateTimeOffset startTime, DateTimeOffset endTime)
