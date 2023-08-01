@@ -380,14 +380,34 @@ namespace Theorem.Middleware
                 var items = xml.SelectNodes("//channel/item");
                 foreach (XmlNode item in items)
                 {
-                    var itemTime = DateTimeOffset.Parse(item.SelectSingleNode("pubDate").InnerText)
-                        .ToOffset(_timeZone.BaseUtcOffset);
+                    if ((item.SelectSingleNode("pubDate") == null) ||
+                        (item.SelectSingleNode("title") == null))
+                    {
+                        continue;
+                    }
+                    var itemTime = TimeZoneInfo.ConvertTimeFromUtc(DateTimeOffset.Parse(
+                        item.SelectSingleNode("pubDate").InnerText).UtcDateTime, _timeZone);
                     if ((itemTime < startTime) || (itemTime > endTime))
                     {
                         continue;
                     }
                     var title = item.SelectSingleNode("title").InnerText;
-                    var url = item.SelectSingleNode("*[name()='x-trumba:weblink']").InnerText;
+
+                    // Fall back to linking the Seattle parks calendar
+                    string url = "https://seattle.gov/parks/volunteer/" +
+                        "trail-building-and-park-clean-up/volunteer-calendar";
+                    // Weblink tends to be the most reliable in terms of referring to actual
+                    // event information
+                    if (item.SelectSingleNode("*[name()='x-trumba:weblink']") != null)
+                    {
+                        url = item.SelectSingleNode("*[name()='x-trumba:weblink']").InnerText;
+                    }
+                    // 'event actions' link will at least tell you where the event is happening
+                    // and allows you to export a calendar entry
+                    else if (item.SelectSingleNode("*[name()='x-trumba:ealink']") != null)
+                    {
+                        url = item.SelectSingleNode("*[name()='x-trumba:ealink']").InnerText;
+                    }
 
                     events.Add(new VolunteeringEvent()
                     {
