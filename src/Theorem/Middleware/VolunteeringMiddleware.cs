@@ -267,7 +267,7 @@ namespace Theorem.Middleware
                 var result = await _httpClient.SendAsync(request);
                 if (!result.IsSuccessStatusCode)
                 {
-                    throw new ApplicationException("Error fetching volunteering events from" + 
+                    throw new ApplicationException("Error fetching volunteering events from " +
                         $"Bellevue Parks community calendar: HTTP {result.StatusCode}");
                 }
                 using (var json = await JsonDocument.ParseAsync(

@@ -8,6 +8,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Web;
@@ -148,7 +149,8 @@ namespace Theorem.ChatServices
         public async Task<string> SendMessageToChannelIdAsync(string channelId,
             ChatMessageModel message)
         {
-            var eventResponse = await sendTextMessageToRoomAsync(channelId, message.Body);
+            var eventResponse = await sendTextMessageToRoomAsync(channelId, message.Body,
+                message.ThreadingId);
             return eventResponse.EventId;
         }
 
@@ -450,14 +452,22 @@ namespace Theorem.ChatServices
         }
 
         private async Task<MatrixSendResponse> sendTextMessageToRoomAsync(string roomId,
-            string body)
+            string body, string threadEventId = "")
         {
             // https://matrix.org/docs/spec/client_server/latest#id271
-            var payload = new Dictionary<string, string>()
+            var payload = new JsonObject
             {
-                { "msgtype", "m.text" },
-                { "body", body }
+                ["msgtype"] = "m.text",
+                ["body"] = body,
             };
+            if (threadEventId != "")
+            {
+                payload.Add("m.relates_to", new JsonObject
+                {
+                    ["rel_type"] = "m.thread",
+                    ["event_id"] = threadEventId,
+                });
+            }
             var payloadString = JsonSerializer.Serialize(payload);
             var content = new StringContent(payloadString, Encoding.UTF8, "application/json");
 
