@@ -149,8 +149,13 @@ namespace Theorem.ChatServices
         public async Task<string> SendMessageToChannelIdAsync(string channelId,
             ChatMessageModel message)
         {
+            string formattedMessage = "";
+            if (message.FormattedBody != null && message.FormattedBody.ContainsKey("html"))
+            {
+                formattedMessage = message.FormattedBody["html"];
+            }
             var eventResponse = await sendTextMessageToRoomAsync(channelId, message.Body,
-                message.ThreadingId);
+                message.ThreadingId, formattedMessage);
             return eventResponse.EventId;
         }
 
@@ -452,7 +457,7 @@ namespace Theorem.ChatServices
         }
 
         private async Task<MatrixSendResponse> sendTextMessageToRoomAsync(string roomId,
-            string body, string threadEventId = "")
+            string body, string threadEventId = "", string formattedMessage = "")
         {
             // https://matrix.org/docs/spec/client_server/latest#id271
             var payload = new JsonObject
@@ -467,6 +472,11 @@ namespace Theorem.ChatServices
                     ["rel_type"] = "m.thread",
                     ["event_id"] = threadEventId,
                 });
+            }
+            if (formattedMessage != "")
+            {
+                payload["format"] = "org.matrix.custom.html";
+                payload["formatted_body"] = formattedMessage;
             }
             var payloadString = JsonSerializer.Serialize(payload);
             var content = new StringContent(payloadString, Encoding.UTF8, "application/json");

@@ -21,6 +21,8 @@ namespace Theorem.Models
 
         public virtual string Body { get; set; }
 
+        public virtual Dictionary<string, string> FormattedBody { get; set; }
+
         public virtual string ChannelId { get; set; }
 
         public virtual DateTimeOffset TimeSent { get; set; }

@@ -21,7 +21,7 @@ namespace Theorem.Middleware
     /// </summary>
     public class RegalMiddleware : IMiddleware
     {
-        private ILogger<RegalMiddleware> _logger;
+        private readonly ILogger<RegalMiddleware> _logger;
 
         private ConfigurationSection _configuration;
 
@@ -34,14 +34,6 @@ namespace Theorem.Middleware
         private TimeSpan _postTimeOfDay = new(8, 0, 0);
 
         private string[] _locationCodes;
-
-        private string _postPrefix = "🌲 Hello volunteer friends! The following events are " + 
-            "happening soon in our area. If you're interested, please sign up and " + 
-            "ask others to join!";
-
-        private string _noEventsMessage = "📃 I couldn't find any volunteering events this week. " +
-            "Check local parks pages and other resources and share here if you find " +
-            "opportunities!";
 
         private Timer _postTimer;
 
@@ -137,51 +129,32 @@ namespace Theorem.Middleware
             try
             {
                 _logger.LogInformation($"Fetching movies...");
+                var fromDate = DateOnly.FromDateTime(DateTime.Now);
+                var toDate = DateOnly.FromDateTime(DateTime.Now.AddDays(7));
                 var movieSchedule = await GetMoviesForLocationsAsync(_locationCodes,
-                    DateOnly.FromDateTime(DateTime.Now),
-                    DateOnly.FromDateTime(DateTime.Now.AddDays(7)));
+                    fromDate, toDate);
 
-                string mainMsg = "📽️ Upcoming theater showings for the week of " +
-                    $"{DateTime.Now:M/d}:\n\n";
-                string detailedMsg = "📅 Detailed schedule:\n\n";
-                foreach (var film in movieSchedule.Films.Values.OrderBy(f => f.Title))
+                // Post a summary message first, then use the thread to post detailed schedules
+                var films = movieSchedule.Films.Values.OrderBy(f => f.Title).ToList();
+                _logger.LogInformation($"Posting summary for {films.Count} films...");
+                string summaryMsg = $"📽️ Showings {fromDate:M/d} – {toDate:M/d}:\n\n";
+                string summaryMsgFormatted = $"<h1>📽️ Showings " + 
+                    $"{fromDate:M/d} – {toDate:M/d}</h1>\n<p>\n";
+                foreach (var film in films)
                 {
-                    string titleHeader = $"🎞️ {film.Title}\n";
-                    mainMsg += titleHeader;
-                    detailedMsg += titleHeader;
-                    var showings = movieSchedule.ShowingsByFilmId[film.Id];
-                    var showingsByCinema = showings.GroupBy(s => s.CinemaId)
-                        .OrderBy(g => Array.IndexOf(_locationCodes, g.Key));
-                    foreach (var showingGroup in showingsByCinema)
+                    summaryMsg += $"🎞️ {film.Title} ({film.Duration:%h}h{film.Duration:%m}m)\n";
+                    if (film.VideoLink != null)
                     {
-                        var cinema = movieSchedule.Cinemas[showingGroup.Key];
-                        string daysOfWeek = string.Join(" ", showingGroup
-                            .OrderBy(g => g.ShowingTime).Select(g => g.ShowingTime.DayOfWeek)
-                            .Distinct().Select(d => DayOfWeekAbbreviation(d)));
-                        mainMsg += $"\t📍 {cinema.DisplayName}: {daysOfWeek}";
-                        detailedMsg += $"\t📍 {cinema.DisplayName}:\n";
-                        var perDayGroups = showingGroup.GroupBy(s => s.ShowingTime.Date);
-                        foreach (var perDayGroup in perDayGroups)
-                        {
-                            detailedMsg += $"\t{perDayGroup.Key:ddd M/d}: ";
-                            bool firstShowing = true;
-                            foreach (var showing in perDayGroup)
-                            {
-                                if (!firstShowing)
-                                {
-                                    detailedMsg += ", ";
-                                }
-                                detailedMsg += $"{showing.ShowingTime:hh:mmtt}";
-                                firstShowing = false;
-                            }
-                            detailedMsg += "\n";
-                        }
-                        mainMsg += "\n";
-                        detailedMsg += "\n";
+                        summaryMsgFormatted += $"🎞️ <a href=\"{film.VideoLink}\">" +
+                            $"{film.Title}</a> ({film.Duration:%h}h{film.Duration:%m}m)<br />\n";
                     }
-                    mainMsg += "\n";
+                    else
+                    {
+                        summaryMsgFormatted += $"🎞️ {film.Title} " + 
+                            $"({film.Duration:%h}h{film.Duration:%m}m)<br />\n";
+                    }
                 }
-                mainMsg += "For a detailed schedule, see the thread.";
+                summaryMsgFormatted += "</p>";
 
                 foreach (var connection in _chatServicePostChannelId)
                 {
@@ -191,15 +164,69 @@ namespace Theorem.Middleware
                         connection.Value,
                         new ChatMessageModel()
                         {
-                            Body = mainMsg,
+                            Body = summaryMsg,
+                            FormattedBody = new(){ {"html", summaryMsgFormatted} }
                         });
-                    await connection.Key.SendMessageToChannelIdAsync(
-                        connection.Value,
-                        new ChatMessageModel()
+
+                    // Post cinema schedules for each film in thread
+                    foreach (var film in films)
+                    {
+                        string filmMsg = "", filmMsgFormatted = "";
+                        var showings = movieSchedule.ShowingsByFilmId[film.Id];
+                        var showingsByCinema = showings.GroupBy(s => s.CinemaId)
+                            .OrderBy(g => Array.IndexOf(_locationCodes, g.Key));
+                        filmMsg += $"{film.Title} ({film.Duration:%h}h{film.Duration:%m}m)\n";
+                        if (film.VideoLink != null)
                         {
-                            Body = detailedMsg,
-                            ThreadingId = threadId,
-                        });
+                            filmMsgFormatted +=
+                                $"<h2><a href=\"{film.VideoLink}\">{film.Title}</a> " + 
+                                $"({film.Duration:%h}h{film.Duration:%m}m)</h2>\n";
+                        }
+                        else
+                        {
+                            filmMsgFormatted += $"<h2>{film.Title} " + 
+                                $"({film.Duration:%h}h{film.Duration:%m}m)</h2>\n";
+                        }
+                        filmMsgFormatted += "<p>";
+                        foreach (var showingGroup in showingsByCinema)
+                        {
+                            var cinema = movieSchedule.Cinemas[showingGroup.Key];
+                            filmMsg += $"📍 {cinema.DisplayName}\n";
+                            filmMsgFormatted += $"<b>📍 {cinema.DisplayName}</b><br />\n";
+                            var perDayGroups = showingGroup.GroupBy(s => s.ShowingTime.Date);
+                            foreach (var perDayGroup in perDayGroups)
+                            {
+                                filmMsg += $"\t{perDayGroup.Key:ddd M/d}: ";
+                                filmMsgFormatted += $"<b>{perDayGroup.Key:ddd M/d}: </b>";
+                                bool firstShowing = true;
+                                foreach (var showing in perDayGroup)
+                                {
+                                    if (!firstShowing)
+                                    {
+                                        filmMsg += ", ";
+                                        filmMsgFormatted += ", ";
+                                    }
+                                    filmMsg += $"{showing.ShowingTime:hh:mmtt}";
+                                    filmMsgFormatted += $"<a href=\"{showing.BookingLink}\">" + 
+                                        $"{showing.ShowingTime:hh:mmtt}</a>";
+                                    firstShowing = false;
+                                }
+                                filmMsg += "\n";
+                                filmMsgFormatted += "<br />\n";
+                            }
+                            filmMsg += "\n";
+                            filmMsgFormatted += "<br />\n";
+                        }
+                        filmMsgFormatted += "</p>";
+                        await connection.Key.SendMessageToChannelIdAsync(
+                            connection.Value,
+                            new ChatMessageModel()
+                            {
+                                Body = filmMsg,
+                                ThreadingId = threadId,
+                                FormattedBody = new(){ {"html", filmMsgFormatted} }
+                            });
+                    }
                 }
             }
             catch (Exception e)
