@@ -238,7 +238,7 @@ namespace Theorem.ChatServices
             _logger = logger;
         }
 
-        public async Task StartAsync()
+        public async Task RunAsync()
         {
             // Clear out our members
             _channels.Clear();

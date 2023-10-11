@@ -37,7 +37,7 @@ namespace Theorem.Utility
             Func<Task> action,
             Action<Exception, (uint retryNumber, uint nextRetrySeconds)> onException,
             uint maxRetries = 0,
-            uint maxRetryDelaySeconds = 32)
+            uint maxRetryDelaySeconds = 120)
         {
             uint currentRetry = 0;
             DateTime lastRun;

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Autofac;
 using Microsoft.Extensions.Configuration;
@@ -82,6 +83,15 @@ namespace Theorem
             // Register MiddlewarePipeline
             registerMiddlewarePipeline(containerBuilder);
 
+            // Handle SIGTERM/Ctrl+C gracefully
+            var cts = new CancellationTokenSource();
+            Console.CancelKeyPress += (s, e) =>
+            {
+                _logger.LogInformation("Ctrl+C pressed, shutting down...");
+                cts.Cancel();
+                e.Cancel = true;
+            };
+
             // Construct IoC container
             _iocContainer = containerBuilder.Build();
             using (var scope = _iocContainer.BeginLifetimeScope())
@@ -91,7 +101,7 @@ namespace Theorem
                 await Task.WhenAll(
                     chatServices.Select(c => 
                         TaskUtilities.ExpontentialRetryAsync(
-                            c.StartAsync,
+                            c.RunAsync,
                             (e, r) => onChatServiceConnectionInterruption(c, e, r)))
                 );
             }

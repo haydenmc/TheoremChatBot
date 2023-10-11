@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Theorem.Models;
 
@@ -23,7 +24,7 @@ namespace Theorem.ChatServices
 
         event EventHandler<ICollection<ChannelModel>> ChannelsUpdated;
         
-        Task StartAsync();
+        Task RunAsync(CancellationToken cancellationToken);
 
         Task<string> SendMessageToChannelIdAsync(string channelId, ChatMessageModel message);
 

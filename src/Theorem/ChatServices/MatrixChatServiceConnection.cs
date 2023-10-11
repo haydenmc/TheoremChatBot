@@ -112,7 +112,7 @@ namespace Theorem.ChatServices
                 .Add(new MediaTypeWithQualityHeaderValue("application/json"));
         }
 
-        public async Task StartAsync()
+        public async Task RunAsync()
         {
             _logger.LogInformation($"{Name}: Connecting to {_serverBaseUrl.ToString()}...");
             await loginAsync();
