@@ -17,7 +17,5 @@ public enum WeekOfMonth
 public class WeeklyRecurringTime
 {
     public uint WeekInterval { get; set; } = 1;
-    public DateTime StartDate { get; set; }
-    public DayOfWeek DayOfWeek { get; set; }
-    public TimeZoneInfo TimeZone { get; set; } = TimeZoneInfo.Local;
+    public DateTimeOffset StartDateTime { get; set; }
 }

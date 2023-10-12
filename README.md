@@ -66,6 +66,31 @@ More docs later. I'm just using this to store some useful info.
             ],
             "PostDayOfWeek": "Monday",
             "PostTime": "08:00"
+        },
+        "Eastra": {
+            "Enabled": true,
+            "PostChannels": [
+                {
+                    "ChatServiceName": "WarmItUpMatrix",
+                    "ChannelName": "#bot:warmitup.chat"
+                }
+            ],
+            "WeeklyPostSchedules": [
+                {
+                    "RecurrenceStartDate": "2023-10-15",
+                    "RecurrenceWeeklyInterval": 2,
+                    "VoteDayOfWeek": "Sunday",
+                    "VoteTime": "17:00",
+                    "TimeToAnnounce": "39:00:00"
+                },
+                {
+                    "RecurrenceStartDate": "2023-10-22",
+                    "RecurrenceWeeklyInterval": 2,
+                    "VoteDayOfWeek": "Sunday",
+                    "VoteTime": "17:00",
+                    "TimeToAnnounce": "63:00:00"
+                }
+            ]
         }
     }
 }
