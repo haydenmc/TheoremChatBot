@@ -220,6 +220,11 @@ namespace Theorem.ChatServices
             return ""; // Mumble does not assign IDs to messages
         }
 
+        public Task<string> SendMessageReactionAsync(string channelId, string messageId, string unicodeReaction)
+        {
+            throw new NotImplementedException();
+        }
+
         public async Task<string> UpdateMessageAsync(string channelId, string messageId,
             ChatMessageModel message)
         {
@@ -677,6 +682,11 @@ namespace Theorem.ChatServices
             _logger.LogWarning("Attempted to set Mumble channel topic, but Mumble does not " + 
                 "support channel topics.");
             return Task.CompletedTask;
+        }
+
+        public Task<IEnumerable<ReactionModel>> GetMessageReactionsAsync(string channelId, string messageId)
+        {
+            throw new NotImplementedException();
         }
     }
 }

@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -86,8 +87,6 @@ namespace Theorem.ChatServices
 
         private string _deviceDisplayName;
 
-        private string _accessToken;
-
         private string _userId;
 
         private string _nextSyncBatchToken;
@@ -159,6 +158,34 @@ namespace Theorem.ChatServices
             return eventResponse.EventId;
         }
 
+        public async Task<string> SendMessageReactionAsync(string channelId, string messageId,
+            string unicodeReaction)
+        {
+            // https://spec.matrix.org/latest/client-server-api/#put_matrixclientv3roomsroomidsendeventtypetxnid
+            var payload = new JsonObject
+            {
+                ["m.relates_to"] = new JsonObject
+                {
+                    ["rel_type"] = "m.annotation",
+                    ["event_id"] = messageId,
+                    ["key"] = unicodeReaction,
+                },
+            };
+            var payloadString = JsonSerializer.Serialize(payload);
+            var content = new StringContent(payloadString, Encoding.UTF8, "application/json");
+            var result = await _httpClient.PutAsync(
+                $"/_matrix/client/v3/rooms/{HttpUtility.UrlEncode(channelId)}" +
+                $"/send/m.reaction/{_nextTxnId++}", content);
+            if (result.StatusCode != HttpStatusCode.OK)
+            {
+                var error = await result.Content.ReadFromJsonAsync<MatrixError>();
+                throw new ApplicationException($"Received error sending reaction, " +
+                    $"{error.ErrorCode}: {error.Error}");
+            }
+            var response = await result.Content.ReadFromJsonAsync<MatrixSendResponse>();
+            return response.EventId;
+        }
+
         public async Task<string> UpdateMessageAsync(string channelId, string messageId,
             ChatMessageModel message)
         {
@@ -206,6 +233,57 @@ namespace Theorem.ChatServices
             return new Task(() => {});
         }
 
+        public async Task<IEnumerable<ReactionModel>> GetMessageReactionsAsync(string channelId,
+            string messageId)
+        {
+            List<ReactionModel> reactions = new();
+            var result = await _httpClient.GetAsync(
+                $"/_matrix/client/v1/rooms/{HttpUtility.UrlEncode(channelId)}" +
+                $"/relations/{HttpUtility.UrlEncode(messageId)}?limit=100"); // TODO pagination
+            if (result.StatusCode != HttpStatusCode.OK)
+            {
+                var error = await result.Content.ReadFromJsonAsync<MatrixError>();
+                throw new ApplicationException($"Received error querying message reactions," +
+                    $"{error.ErrorCode}: {error.Error}");
+            }
+            var response = await result.Content.ReadFromJsonAsync<MatrixRoomRelationsResponse>();
+            foreach (var matrixEvent in response.Chunk)
+            {
+                if (matrixEvent is MatrixRoomReactionEvent)
+                {
+                    MatrixRoomReactionEvent reactionEvent = matrixEvent as MatrixRoomReactionEvent;
+                    string alias = reactionEvent.Sender;
+                    string displayName = reactionEvent.Sender;
+                    var channel = _channels.SingleOrDefault(c => (c.Id == channelId));
+                    if (channel != null)
+                    {
+                        var sender = channel.Users.SingleOrDefault(
+                            u => (u.Id == reactionEvent.Sender));
+                        alias = sender.Alias;
+                        displayName = sender.DisplayName;
+                    }
+                    var reactionModel = new ReactionModel()
+                    {
+                        Id = reactionEvent.EventId,
+                        MessageId = reactionEvent.Content.RelatesTo.EventId,
+                        Provider = ChatServiceKind.Matrix,
+                        ProviderInstance = Name,
+                        AuthorId = reactionEvent.Sender,
+                        AuthorAlias = alias,
+                        AuthorDisplayName = displayName,
+                        Reaction = reactionEvent.Content.RelatesTo.Key,
+                        ChannelId = channelId,
+                        TimeSent = DateTimeOffset.FromUnixTimeMilliseconds(
+                            (long)reactionEvent.OriginServerTimestamp),
+                        FromChatServiceConnection = this,
+                        IsFromTheorem = (reactionEvent.Sender.Equals(_userId)),
+                    };
+                    reactions.Add(reactionModel);
+                }
+            }
+            return reactions;
+        }
+
         private void loadConfiguration()
         {
             _serverBaseUrl =
@@ -247,7 +325,6 @@ namespace Theorem.ChatServices
 
             var response = await result.Content.ReadFromJsonAsync<MatrixLoginResponse>();
             _deviceId = response.DeviceId;
-            _accessToken = response.AccessToken;
             _userId = response.UserId;
             _httpClient.DefaultRequestHeaders.Authorization = 
                 new AuthenticationHeaderValue("Bearer", response.AccessToken);
@@ -422,7 +499,7 @@ namespace Theorem.ChatServices
             }
             else
             {
-                _logger.LogInformation($"Ignoring message type '{message.Content.MessageType}'");
+                _logger.LogInformation("Ignoring message type '{}'", message.Content.MessageType);
                 return;
             }
 
@@ -497,31 +574,18 @@ namespace Theorem.ChatServices
 
         private void onConnected()
         {
-            var eventHandler = Connected;
-            if (eventHandler != null)
-            {
-                eventHandler(this, EventArgs.Empty);
-            }
+            Connected?.Invoke(this, EventArgs.Empty);
         }
 
         private void onNewMessage(ChatMessageModel message)
         {
-            var eventHandler = MessageReceived;
-            if (eventHandler != null)
-            {
-                eventHandler(this, message);
-            }
+            MessageReceived?.Invoke(this, message);
         }
 
         protected virtual void onChannelsUpdated()
         {
-            var eventHandler = ChannelsUpdated;
-            if (eventHandler != null)
-            {
-                // Create a shallow copy of our list
-                var channelList = _channels.ToList();
-                eventHandler(this, channelList);
-            }
+            // Create a shallow copy of our list
+            ChannelsUpdated?.Invoke(this, _channels.ToList());
         }
     }
 }

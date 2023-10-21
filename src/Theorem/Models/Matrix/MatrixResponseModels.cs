@@ -135,4 +135,16 @@ namespace Theorem.Models.Matrix
         [JsonPropertyName("sender")]
         public string Sender { get; init; }
     }
+
+    public record MatrixRoomRelationsResponse
+    {
+        [JsonPropertyName("chunk")]
+        public IList<MatrixEvent> Chunk { get; init; }
+
+        [JsonPropertyName("next_batch")]
+        public string NextBatchToken { get; init; }
+
+        [JsonPropertyName("prev_batch")]
+        public string PrevBatchToken { get; init; }
+    }
 }

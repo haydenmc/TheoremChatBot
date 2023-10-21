@@ -2,6 +2,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using Theorem.ChatServices;
 using Theorem.Models;
 
@@ -15,6 +17,8 @@ public class EastraMiddleware : IMiddleware
 
     private readonly IEnumerable<IChatServiceConnection> _chatServiceConnections;
 
+    private readonly Dictionary<IChatServiceConnection, string> _chatServicePostChannelId = new();
+
     private readonly IList<EastraAnnounceSchedule> _announceSchedule;
 
     public EastraMiddleware(
@@ -25,11 +29,9 @@ public class EastraMiddleware : IMiddleware
         _logger = logger;
         _configuration = configuration;
         _chatServiceConnections = chatServiceConnections;
-        _announceSchedule = ParseScheduleFromConfiguration(_configuration);
-
-        parseConfiguration();
+        _announceSchedule = ParseScheduleFromConfiguration(logger, _configuration);
         subscribeToChatServiceConnectedEvents();
-        schedulePostTimer();
+        scheduleVotePostTimers();
     }
 
     public MiddlewareResult ProcessMessage(ChatMessageModel message)
@@ -49,19 +51,16 @@ public class EastraMiddleware : IMiddleware
                 var startDateVal = scheduleConfig.GetValue<string>("RecurrenceStartDate");
                 var weeklyIntervalVal = scheduleConfig.GetValue<uint>(
                     "RecurrenceWeeklyInterval", 1);
-                var voteDayOfWeekVal = scheduleConfig.GetValue<string>("VoteDayOfWeek");
                 var voteTimeVal = scheduleConfig.GetValue<string>("VoteTime");
                 var timeUntilAnnounceVal = scheduleConfig.GetValue<string>("TimeUntilAnnounce");
                 var timeZoneVal = scheduleConfig.GetValue<string>("TimeZone");
-                if ((startDateVal == null) || (voteDayOfWeekVal == null) ||
-                    (voteTimeVal == null) || (timeUntilAnnounceVal == null) ||
-                    (timeZoneVal == null))
+                if ((startDateVal == null) || (voteTimeVal == null) ||
+                    (timeUntilAnnounceVal == null) || (timeZoneVal == null))
                 {
                     logger.LogError("Invalid weekly post schedule configuration, skipping...");
                     continue;
                 }
                 var startDate = DateOnly.ParseExact(startDateVal, "yyyy-MM-dd");
-                var voteDayOfWeek = Enum.Parse<DayOfWeek>(voteDayOfWeekVal);
                 var voteTime = TimeOnly.ParseExact(voteTimeVal, "HH:mm");
                 var timeUntilAnnounce = TimeSpan.ParseExact(timeUntilAnnounceVal, "hh\\:mm", null);
                 var timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneVal);
@@ -69,7 +68,6 @@ public class EastraMiddleware : IMiddleware
                     {
                         RecurrenceStartDate = startDate,
                         RecurrenceWeeklyInterval = weeklyIntervalVal,
-                        VoteDayOfWeek = voteDayOfWeek,
                         VoteTime = voteTime,
                         TimeUntilAnnounce = timeUntilAnnounce,
                         TimeZone = timeZone,
@@ -85,34 +83,61 @@ public class EastraMiddleware : IMiddleware
         return schedule;
     }
 
-    private void parseConfiguration()
+    private void subscribeToChatServiceConnectedEvents()
     {
-        bool successfulParse = true;
-        successfulParse &= Enum.TryParse(_configuration["PostDayOfWeek"],
-            out _postDayOfWeek);
-        successfulParse &= TimeSpan.TryParse(_configuration["PostTime"],
-            out _postTimeOfDay);
-        if (_configuration.GetSection("LocationCodes").Exists())
+        foreach (var chatService in _chatServiceConnections)
         {
-            _locationCodes = _configuration.GetSection("LocationCodes").Get<string[]>();
+            chatService.Connected += onChatServiceConnected;
         }
-        else
+    }
+
+    private async void onChatServiceConnected(object sender, EventArgs e)
+    {
+        var connection = sender as IChatServiceConnection;
+        var matchingService = _configuration
+            .GetSection("PostChannels")
+            .GetChildren()
+            .SingleOrDefault(s => s.GetValue<string>("ChatServiceName") == connection.Name);
+        if (matchingService != null)
         {
-            successfulParse = false;
+            var channelName = matchingService.GetValue<string>("ChannelName");
+            var channelId = await connection.GetChannelIdFromChannelNameAsync(channelName);
+            _chatServicePostChannelId[connection] = channelId;
+            _logger.LogInformation(
+                "Chat service connection {name} connected, using channel {channel}:{id}.",
+                connection.Name,
+                channelName,
+                channelId);
         }
-        if (!successfulParse)
+    }
+
+    private void scheduleVotePostTimers()
+    {
+        foreach (var schedule in _announceSchedule)
         {
-            _logger.LogError("Could not parse configuration values.");
+
         }
+    }
+
+    private static DateTimeOffset GetNextVoteOccurrence(in EastraAnnounceSchedule schedule)
+    {
+        // Get the week # of the start date, compare that to the current week to figure
+        // out when the next occurrence should be.
+        var dateFormatInfo = DateTimeFormatInfo.CurrentInfo;
+        var currentWeekNum = dateFormatInfo.Calendar.GetWeekOfYear(
+            schedule.RecurrenceStartDate.ToDateTime(schedule.VoteTime),
+            dateFormatInfo.CalendarWeekRule, dateFormatInfo.FirstDayOfWeek);
+        //DateTimeOffset.Now.CompareTo(DateTimeOffset.Now.AddDays(-12).)
+
+        throw new NotImplementedException();
     }
 
     public class EastraAnnounceSchedule
     {
+        public TimeZoneInfo TimeZone { get; set; }
         public DateOnly RecurrenceStartDate { get; set; }
         public uint RecurrenceWeeklyInterval { get; set; }
-        public DayOfWeek VoteDayOfWeek { get; set; }
         public TimeOnly VoteTime { get; set; }
         public TimeSpan TimeUntilAnnounce { get; set; }
-        public TimeZoneInfo TimeZone { get; set; }
     }
 }

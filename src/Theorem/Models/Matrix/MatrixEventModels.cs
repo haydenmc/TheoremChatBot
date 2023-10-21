@@ -23,6 +23,8 @@ namespace Theorem.Models.Matrix
 
                     return typeValue switch
                     {
+                        "m.reaction" => JsonSerializer
+                            .Deserialize<MatrixRoomReactionEvent>(rootElement, options),
                         "m.room.canonical_alias" => JsonSerializer
                             .Deserialize<MatrixRoomCanonicalAliasEvent>(rootElement, options),
                         "m.room.create" => JsonSerializer
@@ -160,5 +162,29 @@ namespace Theorem.Models.Matrix
     {
         [JsonPropertyName("name")]
         public string Name { get; init; }
+    }
+
+    public record MatrixRoomReactionEvent : MatrixRoomEvent
+    {
+        [JsonPropertyName("content")]
+        public MatrixRoomEventRelatesToContent Content { get; init; }
+    }
+
+    public record MatrixRoomEventRelatesToContent
+    {
+        [JsonPropertyName("m.relates_to")]
+        public MatrixRelatesToModel RelatesTo { get; init; }
+    }
+
+    public record MatrixRelatesToModel
+    {
+        [JsonPropertyName("event_id")]
+        public string EventId { get; init; }
+
+        [JsonPropertyName("key")]
+        public string Key { get; init; }
+
+        [JsonPropertyName("rel_type")]
+        public string RelationType { get; init; }
     }
 }
