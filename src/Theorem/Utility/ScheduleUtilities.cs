@@ -3,16 +3,16 @@ using System.Globalization;
 
 namespace Theorem.Utility;
 
-[Flags]
-public enum WeekOfMonth
+public static class SchedulingHelpers
 {
-    None = 0,
-    First = 1,
-    Second = 2,
-    Third = 4,
-    Fourth = 8,
-    Fifth = 16,
-    All = First | Second | Third | Fourth | Fifth,
+    public static int ToIsoDayOfWeekNum(this DayOfWeek dayOfWeek)
+    {
+        if (dayOfWeek == DayOfWeek.Sunday)
+        {
+            return 7;
+        }
+        return (int)dayOfWeek;
+    }
 }
 
 public class WeeklyRecurringTime
@@ -38,50 +38,60 @@ public record WeeklyRecurringSchedule
             return firstOccurrenceDateTime;
         }
 
-        // Determine the number of weeks that have passed between the start date
-        // and the "search from" date.
-        var firstOccurrenceWeek = ISOWeek.GetWeekOfYear(firstOccurrenceDateTime);
-        var searchWeek = ISOWeek.GetWeekOfYear(searchFromDateTime);
-
-        // If we're searching in a future year, count those weeks first
+        // Advance through each year to determine the exact week delta between the recurrence
+        // start date and the "search from" date.
         int weekDelta = 0;
-        int targetYearOffset = 0;
-        for (int year = ISOWeek.GetYear(firstOccurrenceDateTime);
-            year < ISOWeek.GetYear(searchFromDateTime); ++year)
+        int yearOffset = 0;
+        int firstOccurrenceYear = ISOWeek.GetYear(firstOccurrenceDateTime);
+        int searchFromYear = ISOWeek.GetYear(searchFromDateTime);
+        for (int year = firstOccurrenceYear; year <= searchFromYear; ++year)
         {
-            targetYearOffset++;
-            weekDelta += ISOWeek.GetWeeksInYear(year);
+            if (year < searchFromYear)
+            {
+                yearOffset++;
+                weekDelta += ISOWeek.GetWeeksInYear(year);
+            }
+            else if (year == searchFromYear)
+            {
+                var firstOccurrenceWeek = ISOWeek.GetWeekOfYear(firstOccurrenceDateTime);
+                var searchWeek = ISOWeek.GetWeekOfYear(searchFromDateTime);
+                weekDelta += (searchWeek - firstOccurrenceWeek);
+            }
         }
-        // Then apply the delta between the search week number and scheduled week number
-        weekDelta += (searchWeek - firstOccurrenceWeek);
 
-        // Determine how far the "search from" week is from the weekly interval
-        DateTime nextOccurrenceDateTime;
+        // If the "search from" date aligns with the recurrence interval, but the
+        // recurrence time has already passed, we need to advance to the next interval
+        var searchFromTimeOnly = new TimeOnly(searchFromDateTime.Hour, searchFromDateTime.Minute);
+        var isSameWeek = (weekDelta % WeeklyInterval == 0);
+        var isSameDayButAfterTime = ((searchFromTimeOnly > AtTime) &&
+            (searchFromDateTime.DayOfWeek == firstOccurrenceDateTime.DayOfWeek));
+        var isLaterDay = (searchFromDateTime.DayOfWeek.ToIsoDayOfWeekNum() >
+            firstOccurrenceDateTime.DayOfWeek.ToIsoDayOfWeekNum());
+        if (isSameWeek && (isLaterDay || isSameDayButAfterTime))
+        {
+            weekDelta += (int)WeeklyInterval;
+        }
+
+        // Line up the week delta with the weekly interval
+        weekDelta += weekDelta % (int)WeeklyInterval;
+
+        // Translate the week delta to an exact date by iterating from the start week
+        var weeks = ISOWeek.GetWeekOfYear(firstOccurrenceDateTime) + weekDelta;
+        var occurrenceYear = firstOccurrenceYear;
         while (true)
         {
-            int targetWeekOffset = weekDelta % (int)WeeklyInterval;
-            nextOccurrenceDateTime = ISOWeek.ToDateTime(
-                (searchFromDateTime.Year + targetYearOffset),
-                searchWeek + targetWeekOffset, firstOccurrenceDateTime.DayOfWeek)
-                .AddHours(AtTime.Hour).AddMinutes(AtTime.Minute);
-
-            // If the next occurrence date is before the "search from" date, roll over
-            // to the next weekly interval.
-            if (nextOccurrenceDateTime < searchFromDateTime)
+            var currentYearWeeks = ISOWeek.GetWeeksInYear(occurrenceYear);
+            if (weeks > currentYearWeeks)
             {
-                weekDelta += (int)WeeklyInterval;
-                int maxWeeks = ISOWeek.GetWeeksInYear(searchFromDateTime.Year + targetYearOffset);
-                if (weekDelta >= maxWeeks)
-                {
-                    targetYearOffset += 1;
-                    weekDelta %= maxWeeks;
-                    searchWeek = 1;
-                }
-                continue;
+                weeks -= currentYearWeeks;
             }
-            break;
+            else
+            {
+                break;
+            }
+            ++occurrenceYear;
         }
-
-        return nextOccurrenceDateTime;
+        return ISOWeek.ToDateTime(occurrenceYear, weeks, firstOccurrenceDateTime.DayOfWeek)
+            .Add(AtTime.ToTimeSpan());
     }
 }
