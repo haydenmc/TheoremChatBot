@@ -410,7 +410,7 @@ namespace Theorem.ChatServices
                 // Reconstruct download URL from MXC URI as per
                 // https://spec.matrix.org/v1.3/client-server-api/#get_matrixmediav3downloadservernamemediaidfilename
                 var mxcUrl = new Uri(imageContent.Url);
-                string attachmentUrl = $"{_serverBaseUrl}/_matrix/media/v3/download/" +
+                string attachmentUrl = $"{_serverBaseUrl}_matrix/media/v3/download/" +
                     $"{mxcUrl.Host}{mxcUrl.LocalPath}/file";
 
                 attachments.Add(new AttachmentModel()
