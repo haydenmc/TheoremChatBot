@@ -269,7 +269,6 @@ namespace Theorem.Middleware
             }
 
             // Pull the list of Regal theaters
-            Dictionary<string, RegalTheaterProps.RegalTheaterData.RegalTheater> theaters;
             {
                 var request = new HttpRequestMessage()
                     {
