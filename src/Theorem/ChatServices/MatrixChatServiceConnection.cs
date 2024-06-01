@@ -94,7 +94,7 @@ namespace Theorem.ChatServices
 
         private string _roomServerRestriction;
 
-        private int _nextTxnId = 0;
+        private uint _nextTxnId = (uint)Random.Shared.Next(-int.MaxValue, int.MaxValue);
 
         private HttpClient _httpClient;
 
@@ -465,7 +465,7 @@ namespace Theorem.ChatServices
                 ["msgtype"] = "m.text",
                 ["body"] = body,
             };
-            if (threadEventId != "")
+            if (!string.IsNullOrEmpty(threadEventId))
             {
                 payload.Add("m.relates_to", new JsonObject
                 {
@@ -473,7 +473,7 @@ namespace Theorem.ChatServices
                     ["event_id"] = threadEventId,
                 });
             }
-            if (formattedMessage != "")
+            if (!string.IsNullOrEmpty(formattedMessage))
             {
                 payload["format"] = "org.matrix.custom.html";
                 payload["formatted_body"] = formattedMessage;

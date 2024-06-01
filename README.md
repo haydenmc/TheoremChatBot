@@ -66,6 +66,18 @@ More docs later. I'm just using this to store some useful info.
             ],
             "PostDayOfWeek": "Monday",
             "PostTime": "08:00"
+        },
+        "Regal": {
+            "Enabled": true,
+            "PostChannels": [
+                {
+                    "ChatServiceName": "WarmItUpMatrix",
+                    "ChannelName": "#theatergoers:warmitup.chat"
+                }
+            ],
+            "PostDayOfWeek": "Wednesday",
+            "PostTime": "01:00",
+            "LocationCodes": ["0905", "0904", "1942", "1931"]
         }
     }
 }

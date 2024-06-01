@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
@@ -135,7 +136,9 @@ namespace Theorem.Middleware
                     fromDate, toDate);
 
                 // Post a summary message first, then use the thread to post detailed schedules
-                var films = movieSchedule.Films.Values.OrderBy(f => f.Title).ToList();
+                var films = movieSchedule.Films.Values
+                    .Where(f => movieSchedule.ShowingsByFilmId.ContainsKey(f.Id))
+                    .OrderBy(f => f.Title).ToList();
                 _logger.LogInformation($"Posting summary for {films.Count} films...");
                 string summaryMsg = $"📽️ Showings {fromDate:M/d} – {toDate:M/d}:\n\n";
                 string summaryMsgFormatted = $"<h1>📽️ Showings " + 
@@ -239,93 +242,120 @@ namespace Theorem.Middleware
             IEnumerable<string> locationCodes, DateOnly startDate, DateOnly endDate)
         {
             var returnValue = new FilmScheduleModel();
-            // First we need to translate location codes to names.
-            var endDateString = endDate.ToString("yyyy-MM-dd");
-            _logger.LogInformation("Fetching cinema list from Regal API...");
-            var locations = new Dictionary<string, string>();
+
+            // First, we need a "build id", since it's needed in the Regal API URI.
+            // We can extract it from any Regal front-end page.
+            string buildId;
             {
                 var request = new HttpRequestMessage()
                     {
-                        RequestUri = new Uri("https://www.regmovies.com/us/data-api-service/v1" + 
-                            $"/quickbook/10110/cinemas/with-event/until/{endDateString}"),
+                        RequestUri = new Uri("https://www.regmovies.com/"),
                         Method = HttpMethod.Get,
                     };
                 var result = await _httpClient.SendAsync(request);
                 if (!result.IsSuccessStatusCode)
                 {
-                    throw new ApplicationException("Error fetching cinema location list from " +
-                        $"Regal: HTTP {result.StatusCode}");
+                    throw new ApplicationException("Could not retrieve Regal homepage to read " + 
+                        "build id.");
                 }
-                var response = await JsonSerializer.DeserializeAsync<RegalCinemasResponse>(
-                    await result.Content.ReadAsStreamAsync());
-                locations = response.Body.Cinemas.ToDictionary(m => m.Id, m => m.DisplayName);
-                foreach (var locationCode in locationCodes)
+                var resultContent = await result.Content.ReadAsStringAsync();
+                var buildIdMatch = Regex.Match(resultContent,
+                    "\"buildId\"[\\s]*:[\\s]*\"([a-zA-Z0-9-_]+)\"");
+                if (!buildIdMatch.Success || (buildIdMatch.Groups.Count < 1))
                 {
-                    returnValue.Cinemas[locationCode] = new FilmScheduleModel.CinemaModel()
+                    throw new ApplicationException("Could not find build id in Regal homepage.");
+                }
+                buildId = buildIdMatch.Groups[1].Value;
+            }
+
+            // Pull the list of Regal theaters
+            {
+                var request = new HttpRequestMessage()
                     {
-                        Id = locationCode,
-                        DisplayName = locations[locationCode],
+                        RequestUri = new Uri(
+                            $"https://www.regmovies.com/_next/data/{buildId}/en/theatres.json")
                     };
+                var result = await _httpClient.SendAsync(request);
+                if (!result.IsSuccessStatusCode)
+                {
+                    throw new ApplicationException("Could not retrieve Regal theater list.");
+                }
+                var parsedContent = await JsonSerializer.DeserializeAsync<
+                    RegalPageProps<RegalTheaterProps>>(await result.Content.ReadAsStreamAsync());
+                foreach (var theater in parsedContent.PageProps.TheaterData.Theaters)
+                {
+                    if (locationCodes.Contains(theater.Code))
+                    {
+                        returnValue.Cinemas.Add(theater.Code, new FilmScheduleModel.CinemaModel()
+                            {
+                                Id = theater.Code,
+                                DisplayName = theater.Name,
+                            });
+                    }
                 }
             }
-            
-            // Now, we fetch movies + events for each location on each day
-            _logger.LogInformation("Fetching showings from Regal API...");
-            for (var date = startDate; date <= endDate; date = date.AddDays(1))
+
+            // Pull showtimes for each day at each theater
+            foreach (var locationCode in locationCodes)
             {
-                var dateString = date.ToString("yyyy-MM-dd");
-                foreach(var locationCode in locationCodes)
+                for (var currentDate = startDate; currentDate <= endDate;
+                    currentDate = currentDate.AddDays(1))
                 {
                     var request = new HttpRequestMessage()
                         {
-                            RequestUri = new Uri("https://www.regmovies.com/us/data-api-service" + 
-                                "/v1/quickbook/10110/film-events/in-cinema" + 
-                                $"/{locationCode}/at-date/{dateString}"),
-                            Method = HttpMethod.Get,
+                            RequestUri = new Uri("https://www.regmovies.com/api/getShowtimes" + 
+                                $"?theatres={locationCode}" + 
+                                $"&date={currentDate:MM-dd-yyyy}" + 
+                                "&hoCode=&ignoreCache=false&moviesOnly=false")
                         };
                     var result = await _httpClient.SendAsync(request);
                     if (!result.IsSuccessStatusCode)
                     {
-                        throw new ApplicationException("Error fetching movie events from " +
-                            $"Regal: HTTP {result.StatusCode}");
+                        throw new ApplicationException("Could not retrieve Regal showtime list.");
                     }
-                    var responseStr = await result.Content.ReadAsStringAsync();
-                    var response = await JsonSerializer.DeserializeAsync<RegalFilmEventsResponse>(
-                        await result.Content.ReadAsStreamAsync());
-                    var responseFilms = response.Body.Films.ToDictionary(f => f.Id, f => f);
-                    foreach (var showing in response.Body.Events)
-                    {
-                        // Add missing films
-                        if (!returnValue.Films.ContainsKey(showing.FilmId))
-                        {
-                            if (!responseFilms.ContainsKey(showing.FilmId))
-                            {
-                                continue;
-                            }
-                            var responseFilm = responseFilms[showing.FilmId];
-                            returnValue.Films[showing.FilmId] = new FilmScheduleModel.FilmModel()
-                            {
-                                Id = responseFilm.Id,
-                                Title = responseFilm.Title,
-                                Duration = new TimeSpan(0, responseFilm.DurationMinutes, 0),
-                                PosterLink = responseFilm.PosterLink,
-                                VideoLink = responseFilm.VideoLink,
-                            };
-                        }
+                    var parsedContent = await JsonSerializer.DeserializeAsync<
+                        RegalShowtimesResponse>(await result.Content.ReadAsStreamAsync());
 
-                        // Add showing
-                        if (!returnValue.ShowingsByFilmId.ContainsKey(showing.FilmId))
+                    // Update films
+                    foreach (var movie in parsedContent.Movies)
+                    {
+                        if (!returnValue.Films.ContainsKey(movie.Code))
                         {
-                            returnValue.ShowingsByFilmId[showing.FilmId] = new();
-                        }
-                        returnValue.ShowingsByFilmId[showing.FilmId].Add(
-                            new FilmScheduleModel.ShowingModel()
+                            returnValue.Films.Add(movie.Code, new FilmScheduleModel.FilmModel()
                             {
-                                FilmId = showing.FilmId,
-                                CinemaId = locationCode,
-                                BookingLink = showing.BookingLink,
-                                ShowingTime = showing.ShowTime,
+                                Id = movie.Code,
+                                Title = movie.Title,
+                                Duration = TimeSpan.FromMinutes(movie.DurationMinutes),
+                                VideoLink = movie.Media
+                                    .SingleOrDefault(m => m.SubType == "Trailer_Youtube")?.Url
                             });
+                        }
+                    }
+                    // Update showtimes
+                    foreach (var showTheater in parsedContent.Shows)
+                    {
+                        foreach (var film in showTheater.Films)
+                        {
+                            foreach (var performance in film.Performances)
+                            {
+                                if (!returnValue.ShowingsByFilmId.ContainsKey(film.Code))
+                                {
+                                    returnValue.ShowingsByFilmId.Add(film.Code,
+                                        new List<FilmScheduleModel.ShowingModel>());
+                                }
+                                returnValue.ShowingsByFilmId[film.Code].Add(
+                                    new FilmScheduleModel.ShowingModel()
+                                        {
+                                            FilmId = film.Code,
+                                            CinemaId = showTheater.TheaterCode,
+                                            ShowingTime = performance.LocalShowTime,
+                                            BookingLink = new Uri(
+                                                "https://experience.regmovies.com/select-tickets" + 
+                                                $"?site={showTheater.TheaterCode}" + 
+                                                $"&id={performance.PerformanceId}")
+                                        });
+                            }
+                        }
                     }
                 }
             }
@@ -412,76 +442,96 @@ namespace Theorem.Middleware
             }
         }
 
-        private class RegalCinemasResponse
+        private class RegalPageProps<T>
         {
-            [JsonPropertyName("body")]
-            public ResponseBody Body { get; set; }
+            [JsonPropertyName("pageProps")]
+            public T PageProps { get; set; }
+        }
 
-            public class ResponseBody
+        private class RegalTheaterProps
+        {
+            [JsonPropertyName("theatreData")]
+            public RegalTheaterData TheaterData { get; set; }
+
+            public class RegalTheaterData
             {
-                [JsonPropertyName("cinemas")]
-                public IEnumerable<Cinema> Cinemas { get; set; }
+                [JsonPropertyName("data")]
+                public IEnumerable<RegalTheater> Theaters { get; set; }
 
-            }
+                public class RegalTheater
+                {
+                    [JsonPropertyName("name")]
+                    public string Name { get; set; }
 
-            public class Cinema
-            {
-                [JsonPropertyName("id")]
-                public string Id { get; set; }
-
-                [JsonPropertyName("displayName")]
-                public string DisplayName { get; set; }
+                    [JsonPropertyName("theatre_code")]
+                    public string Code { get; set; }
+                }
             }
         }
 
-        private class RegalFilmEventsResponse
+        private class RegalShowtimesResponse
         {
-            [JsonPropertyName("body")]
-            public ResponseBody Body { get; set; }
-            
-            public class ResponseBody
-            {
-                [JsonPropertyName("films")]
-                public IEnumerable<Film> Films { get; set; }
+            [JsonPropertyName("shows")]
+            public IEnumerable<RegalShow> Shows { get; set; }
 
-                [JsonPropertyName("events")]
-                public IEnumerable<Event> Events { get; set; }
+            [JsonPropertyName("movies")]
+            public IEnumerable<RegalMovie> Movies { get; set; }
+
+            public class RegalShow
+            {
+                [JsonPropertyName("TheatreCode")]
+                public string TheaterCode { get; set; }
+
+                [JsonPropertyName("Film")]
+                public IEnumerable<RegalShowFilm> Films { get; set; }
+
+                public class RegalShowFilm
+                {
+                    [JsonPropertyName("MasterMovieCode")]
+                    public string Code { get; set; }
+
+                    [JsonPropertyName("Performances")]
+                    public IEnumerable<RegalShowFilmPerformance> Performances { get; set; }
+
+                    public class RegalShowFilmPerformance
+                    {
+                        [JsonPropertyName("PerformanceId")]
+                        public long PerformanceId { get; set; }
+
+                        [JsonPropertyName("CalendarShowTime")]
+                        public DateTime LocalShowTime { get; set; }
+                    }
+                }
             }
 
-            public class Film
+            public class RegalMovie
             {
-                [JsonPropertyName("id")]
-                public string Id { get; set; }
-
-                [JsonPropertyName("name")]
+                [JsonPropertyName("Title")]
                 public string Title { get; set; }
 
-                [JsonPropertyName("length")]
+                [JsonPropertyName("MasterMovieCode")]
+                public string Code { get; set; }
+
+                [JsonPropertyName("Description")]
+                public string Description { get; set; }
+
+                [JsonPropertyName("Duration")]
                 public int DurationMinutes { get; set; }
 
-                [JsonPropertyName("posterLink")]
-                public Uri PosterLink { get; set; }
+                [JsonPropertyName("Media")]
+                public IEnumerable<RegalMovieMedia> Media { get; set; }
 
-                [JsonPropertyName("videoLink")]
-                public Uri VideoLink { get; set; }
-            }
+                public class RegalMovieMedia
+                {
+                    [JsonPropertyName("Type")]
+                    public string Type { get; set; }
 
-            public class Event
-            {
-                [JsonPropertyName("id")]
-                public string Id { get; set; }
+                    [JsonPropertyName("SubType")]
+                    public string SubType { get; set; }
 
-                [JsonPropertyName("filmId")]
-                public string FilmId { get; set; }
-
-                [JsonPropertyName("eventDateTime")]
-                public DateTime ShowTime { get; set; }
-
-                [JsonPropertyName("bookingLink")]
-                public Uri BookingLink { get; set; }
-
-                [JsonPropertyName("auditorium")]
-                public string Auditorium { get; set; }
+                    [JsonPropertyName("Url")]
+                    public Uri Url { get; set; }
+                }
             }
         }
     }
