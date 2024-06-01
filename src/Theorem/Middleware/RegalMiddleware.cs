@@ -106,8 +106,6 @@ namespace Theorem.Middleware
                     connection.Name,
                     channelName,
                     channelId);
-
-                PostMoviesAsync();
             }
         }
 
