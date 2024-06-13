@@ -135,30 +135,11 @@ namespace Theorem.Middleware
                 var movieSchedule = await GetMoviesForLocationsAsync(_locationCodes,
                     fromDate, toDate);
 
-                // Post a summary message first, then use the thread to post detailed schedules
+                // Post a summary message first, then post detailed schedules
+                // as replies to the thread.
                 var films = movieSchedule.Films.Values
                     .Where(f => movieSchedule.ShowingsByFilmId.ContainsKey(f.Id))
                     .OrderBy(f => f.Title).ToList();
-                _logger.LogInformation($"Posting summary for {films.Count} films...");
-                string summaryMsg = $"📽️ Showings {fromDate:M/d} – {toDate:M/d}:\n\n";
-                string summaryMsgFormatted = $"<h1>📽️ Showings " + 
-                    $"{fromDate:M/d} – {toDate:M/d}</h1>\n<p>\n";
-                foreach (var film in films)
-                {
-                    summaryMsg += $"🎞️ {film.Title} ({film.Duration:%h}h{film.Duration:%m}m)\n";
-                    if (film.VideoLink != null)
-                    {
-                        summaryMsgFormatted += $"🎞️ <a href=\"{film.VideoLink}\">" +
-                            $"{film.Title}</a> ({film.Duration:%h}h{film.Duration:%m}m)<br />\n";
-                    }
-                    else
-                    {
-                        summaryMsgFormatted += $"🎞️ {film.Title} " + 
-                            $"({film.Duration:%h}h{film.Duration:%m}m)<br />\n";
-                    }
-                }
-                summaryMsgFormatted += "</p>";
-
                 foreach (var connection in _chatServicePostChannelId)
                 {
                     _logger.LogInformation(
@@ -167,11 +148,11 @@ namespace Theorem.Middleware
                         connection.Value,
                         new ChatMessageModel()
                         {
-                            Body = summaryMsg,
-                            FormattedBody = new(){ {"html", summaryMsgFormatted} }
+                            Body = $"🎞️ Loading showings {fromDate:M/d} – {toDate:M/d}..."
                         });
 
                     // Post cinema schedules for each film in thread
+                    Dictionary<string, Uri> filmLinksByFilmId = new();
                     foreach (var film in films)
                     {
                         string filmMsg = "", filmMsgFormatted = "";
@@ -221,7 +202,7 @@ namespace Theorem.Middleware
                             filmMsgFormatted += "<br />\n";
                         }
                         filmMsgFormatted += "</p>";
-                        await connection.Key.SendMessageToChannelIdAsync(
+                        var filmDetailsMessageId = await connection.Key.SendMessageToChannelIdAsync(
                             connection.Value,
                             new ChatMessageModel()
                             {
@@ -229,7 +210,34 @@ namespace Theorem.Middleware
                                 ThreadingId = threadId,
                                 FormattedBody = new(){ {"html", filmMsgFormatted} }
                             });
+                        filmLinksByFilmId[film.Id] = await connection.Key.GetMessageDeepLinkAsync(
+                            connection.Value, filmDetailsMessageId);
                     }
+
+                    // Edit summary message to link to individual film messages
+                    _logger.LogInformation($"Updating summary for {films.Count} films...");
+                    string summaryMsg = $"📽️ Showings {fromDate:M/d} – {toDate:M/d}:\n\n";
+                    string summaryMsgFormatted = $"<h1>📽️ Showings " + 
+                        $"{fromDate:M/d} – {toDate:M/d}</h1>\n<p>\n";
+                    foreach (var film in films)
+                    {
+                        var filmDetailsMessageLink = filmLinksByFilmId[film.Id];
+                        string trailerLink = "";
+                        if (film.VideoLink != null)
+                        {
+                            trailerLink = $"[<a href=\"{film.VideoLink}\">trailer</a>] ";
+                        }
+                        summaryMsg += $"🎞️ {film.Title} ({film.Duration:%h}h{film.Duration:%m}m)\n";
+                        summaryMsgFormatted += $"🎞️ <a href=\"{filmDetailsMessageLink}\">" +
+                            $"{film.Title}</a> {trailerLink}({film.Duration:%h}h{film.Duration:%m}m)<br />\n";
+                    }
+                    summaryMsgFormatted += "</p>";
+                    await connection.Key.UpdateMessageAsync(connection.Value, threadId,
+                        new ChatMessageModel()
+                        {
+                            Body = summaryMsg,
+                            FormattedBody = new(){ {"html", summaryMsgFormatted} }
+                        });
                 }
             }
             catch (Exception e)

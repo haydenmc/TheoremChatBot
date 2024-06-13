@@ -90,6 +90,8 @@ namespace Theorem.ChatServices
 
         private string _userId;
 
+        private string _homeServerHostname;
+
         private string _nextSyncBatchToken;
 
         private string _roomServerRestriction;
@@ -162,7 +164,6 @@ namespace Theorem.ChatServices
         public async Task<string> UpdateMessageAsync(string channelId, string messageId,
             ChatMessageModel message)
         {
-            // TODO: Only support text messages for now
             var payload = new Dictionary<string, object>()
             {
                 {
@@ -185,6 +186,14 @@ namespace Theorem.ChatServices
                 { "body", $"* {message.Body}" },
             };
 
+            if (message.FormattedBody != null && message.FormattedBody.ContainsKey("html"))
+            {
+                (payload["m.new_content"] as Dictionary<string, object>)["format"] =
+                    "org.matrix.custom.html";
+                (payload["m.new_content"] as Dictionary<string, object>)["formatted_body"] =
+                    message.FormattedBody["html"];
+            }
+
             var payloadString = JsonSerializer.Serialize(payload);
             var content = new StringContent(payloadString, Encoding.UTF8, "application/json");
             var result = await _httpClient.PutAsync(
@@ -204,6 +213,12 @@ namespace Theorem.ChatServices
         {
             // TODO
             return new Task(() => {});
+        }
+
+        public Task<Uri> GetMessageDeepLinkAsync(string channelId, string messageId)
+        {
+            return Task.FromResult(new Uri("https://matrix.to/#/" +
+                $"{channelId}/{messageId}?via={_homeServerHostname}&via=matrix.org"));
         }
 
         private void loadConfiguration()
@@ -249,6 +264,7 @@ namespace Theorem.ChatServices
             _deviceId = response.DeviceId;
             _accessToken = response.AccessToken;
             _userId = response.UserId;
+            _homeServerHostname = response.UserId.Substring(response.UserId.IndexOf(":") + 1);
             _httpClient.DefaultRequestHeaders.Authorization = 
                 new AuthenticationHeaderValue("Bearer", response.AccessToken);
         }

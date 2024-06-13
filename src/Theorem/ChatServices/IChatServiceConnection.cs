@@ -33,5 +33,7 @@ namespace Theorem.ChatServices
         Task<string> GetChannelIdFromChannelNameAsync(string channelName);
 
         Task SetChannelTopicAsync(string channelId, string topic);
+
+        Task<Uri> GetMessageDeepLinkAsync(string channelId, string messageId);
     }
 }

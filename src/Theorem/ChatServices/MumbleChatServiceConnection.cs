@@ -678,5 +678,12 @@ namespace Theorem.ChatServices
                 "support channel topics.");
             return Task.CompletedTask;
         }
+
+        public Task<Uri> GetMessageDeepLinkAsync(string channelId, string messageId)
+        {
+            _logger.LogWarning("Attempted to get Mumble message deep link, but Mumble does not " + 
+                "support message deep links.");
+            return Task.FromResult(new Uri(""));
+        }
     }
 }
