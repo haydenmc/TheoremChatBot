@@ -16,12 +16,12 @@ using Theorem.Utility;
 
 namespace Theorem.Middleware
 {
-    public class EzFtlStreamAnnouncementMiddleware : IMiddleware
+    public class StreamAnnouncementMiddleware : IMiddleware
     {
         /// <summary>
         /// Logging instance
         /// </summary>
-        private ILogger<EzFtlStreamAnnouncementMiddleware> _logger;
+        private ILogger<StreamAnnouncementMiddleware> _logger;
 
         /// <summary>
         /// Configuration object for retrieving configuration values
@@ -62,7 +62,7 @@ namespace Theorem.Middleware
             }
         }
 
-        public EzFtlStreamAnnouncementMiddleware(ILogger<EzFtlStreamAnnouncementMiddleware> logger,
+        public StreamAnnouncementMiddleware(ILogger<StreamAnnouncementMiddleware> logger,
             ConfigurationSection configuration,
             IEnumerable<IChatServiceConnection> chatServiceConnections)
         {
@@ -70,10 +70,10 @@ namespace Theorem.Middleware
             _configuration = configuration;
             _chatServiceConnections = chatServiceConnections;
 
-            _logger.LogInformation("Starting EzFtlStreamAnnouncement Middleware...");
+            _logger.LogInformation("Starting StreamAnnouncement Middleware...");
             subscribeToChatServiceConnectedEvents();
             TaskUtilities
-                .ExpontentialRetryAsync(startEzFtlConnection, onConnectionInterrupted)
+                .ExpontentialRetryAsync(startStreamConnection, onConnectionInterrupted)
                 .FireAndForget();
         }
 
@@ -93,7 +93,7 @@ namespace Theorem.Middleware
         private void onConnectionInterrupted(Exception exception,
             (uint retryNumber, uint nextRetrySeconds) retries)
         {
-            _logger.LogError("EzFtl connection threw exception. " + 
+            _logger.LogError("Stream connection threw exception. " + 
                 "retry {n} in {s} seconds. Exception: {e}",
                 retries.retryNumber,
                 retries.nextRetrySeconds,
@@ -118,12 +118,13 @@ namespace Theorem.Middleware
             }
         }
 
-        private async Task startEzFtlConnection()
+        private async Task startStreamConnection()
         {
-            _logger.LogInformation("Connecting to EzFtl service...");
+            _logger.LogInformation("Connecting to Stream service...");
             var webSocketClient = new ClientWebSocket();
+            webSocketClient.Options.AddSubProtocol("stream-updates");
             await webSocketClient.ConnectAsync(new Uri(_webSocketUrl), CancellationToken.None);
-            _logger.LogInformation("Connected to EzFtl!");
+            _logger.LogInformation("Connected to Stream server!");
             await receive(webSocketClient);
         }
 
@@ -157,7 +158,7 @@ namespace Theorem.Middleware
                 try
                 {
                     var channel = JsonConvert.DeserializeObject<ChannelUpdateModel>(messageString);
-                    if (channel.HasActiveStream)
+                    if (channel.IsLive)
                     {
                         await sendStreamingAnnouncement(channel);
                     }
@@ -179,8 +180,8 @@ namespace Theorem.Middleware
                     connection.Value,
                     new ChatMessageModel()
                     {
-                        Body = $"🎥 '{channel.ChannelName}' has started! " + 
-                            $"{_baseUrl}/{channel.ChannelId}",
+                        Body = $"🎥 '{channel.Name}' has started! " + 
+                            $"{_baseUrl}/{channel.Id}",
                     });
             }
         }
@@ -188,17 +189,14 @@ namespace Theorem.Middleware
         /* Private Types */
         private class ChannelUpdateModel
         {
-            [JsonProperty("channel_id")]
-            public int ChannelId { get; set; }
+            [JsonProperty("Id")]
+            public string Id { get; set; }
 
-            [JsonProperty("channel_name")]
-            public string ChannelName { get; set; }
+            [JsonProperty("Name")]
+            public string Name { get; set; }
 
-            [JsonProperty("has_active_stream")]
-            public bool HasActiveStream { get; set; }
-
-            [JsonProperty("active_stream_id")]
-            public int ActiveStreamId { get; set; }
+            [JsonProperty("IsLive")]
+            public bool IsLive { get; set; }
         }
     }
 }
