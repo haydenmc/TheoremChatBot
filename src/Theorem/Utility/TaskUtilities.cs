@@ -56,11 +56,11 @@ namespace Theorem.Utility
                 // If the action has managed to run for more than a minimal amount
                 // of time, reset the retry count.
                 TimeSpan runTime = DateTime.Now.Subtract(lastRun);
-                if (runTime.TotalSeconds > 10)
+                if (runTime.TotalSeconds > 60)
                 {
                     currentRetry = 0;
                 }
-                uint delaySeconds = (uint)Math.Pow(2, currentRetry);
+                uint delaySeconds = (uint)Math.Pow(2, Math.Min(currentRetry, 9));
                 if (maxRetryDelaySeconds != 0 && (delaySeconds > maxRetryDelaySeconds))
                 {
                     delaySeconds = maxRetryDelaySeconds;
@@ -69,7 +69,10 @@ namespace Theorem.Utility
                 {
                     onException(exception, (currentRetry, delaySeconds));
                 }
-                currentRetry++;
+                if (currentRetry < uint.MaxValue)
+                {
+                    currentRetry++;
+                }
                 Thread.Sleep(TimeSpan.FromSeconds(delaySeconds));
             }
         }
