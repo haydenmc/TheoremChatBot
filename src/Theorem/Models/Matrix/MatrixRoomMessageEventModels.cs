@@ -32,8 +32,11 @@ namespace Theorem.Models.Matrix
                         _ => new MatrixRoomMessageEventContent() { MessageType = typeValue },
                     };
                 }
-                throw new JsonException(
-                    "Failed to extract type property from MatrixRoomMessageEventContent");
+                // TODO: Probably a better way to handle this, but this workaround
+                // Handles empty "content" fields in case of redacted messages.
+                return new MatrixRoomMessageEventContent() { MessageType = "" };
+                // throw new JsonException(
+                //     "Failed to extract type property from MatrixRoomMessageEventContent");
             }
             throw new JsonException("Failed to parse MatrixRoomMessageEventContent");
         }
