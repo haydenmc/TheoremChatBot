@@ -22,6 +22,8 @@ namespace Theorem.Middleware
     /// </summary>
     public class RegalMiddleware : IMiddleware
     {
+        const int NUM_RETRIES = 7;
+
         private readonly ILogger<RegalMiddleware> _logger;
 
         private ConfigurationSection _configuration;
@@ -37,8 +39,6 @@ namespace Theorem.Middleware
         private string[] _locationCodes;
 
         private Timer _postTimer;
-
-        private HttpClient _httpClient = new();
 
         public RegalMiddleware(
             ILogger<RegalMiddleware> logger,
@@ -251,6 +251,12 @@ namespace Theorem.Middleware
         {
             var returnValue = new FilmScheduleModel();
 
+            var handler = new HttpClientHandler()
+            {
+                CookieContainer = new()
+            };
+            HttpClient httpClient = new(handler);
+
             // First, we need a "build id", since it's needed in the Regal API URI.
             // We can extract it from any Regal front-end page.
             string buildId;
@@ -260,11 +266,12 @@ namespace Theorem.Middleware
                         RequestUri = new Uri("https://www.regmovies.com/"),
                         Method = HttpMethod.Get,
                     };
-                var result = await _httpClient.SendAsync(request);
+                PretendToBeEdge(request.Headers);
+                var result = await httpClient.SendAsync(request);
                 if (!result.IsSuccessStatusCode)
                 {
                     throw new ApplicationException("Could not retrieve Regal homepage to read " + 
-                        "build id.");
+                        "build id");
                 }
                 var resultContent = await result.Content.ReadAsStringAsync();
                 var buildIdMatch = Regex.Match(resultContent,
@@ -283,7 +290,8 @@ namespace Theorem.Middleware
                         RequestUri = new Uri(
                             $"https://www.regmovies.com/_next/data/{buildId}/en/theatres.json")
                     };
-                var result = await _httpClient.SendAsync(request);
+                PretendToBeEdge(request.Headers);
+                var result = await httpClient.SendAsync(request);
                 if (!result.IsSuccessStatusCode)
                 {
                     throw new ApplicationException("Could not retrieve Regal theater list.");
@@ -309,17 +317,45 @@ namespace Theorem.Middleware
                 for (var currentDate = startDate; currentDate <= endDate;
                     currentDate = currentDate.AddDays(1))
                 {
-                    var request = new HttpRequestMessage()
+                    _logger.LogDebug("Fetching movies for location {} on {}...", locationCode,
+                        currentDate);
+                    HttpResponseMessage result;
+                    for (int i = 0; true; ++i)
+                    {
+                        var request = new HttpRequestMessage()
                         {
                             RequestUri = new Uri("https://www.regmovies.com/api/getShowtimes" + 
                                 $"?theatres={locationCode}" + 
                                 $"&date={currentDate:MM-dd-yyyy}" + 
                                 "&hoCode=&ignoreCache=false&moviesOnly=false")
                         };
-                    var result = await _httpClient.SendAsync(request);
-                    if (!result.IsSuccessStatusCode)
-                    {
-                        throw new ApplicationException("Could not retrieve Regal showtime list.");
+                        PretendToBeEdge(request.Headers);
+                        result = await httpClient.SendAsync(request);
+                        if (result.IsSuccessStatusCode)
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            var resultStr = await result.Content.ReadAsStringAsync();
+                            if (i < NUM_RETRIES)
+                            {
+                                var delayMs = (int)(Math.Pow(2, i) * 1000);
+                                _logger.LogWarning("Couldn't retrieve Regal showtime list for " +
+                                    "location {}. Retrying in {}ms...", locationCode, delayMs);
+                                handler = new HttpClientHandler()
+                                {
+                                    CookieContainer = new()
+                                };
+                                httpClient = new(handler);
+                                await Task.Delay(delayMs);
+                            }
+                            else
+                            {
+                                throw new ApplicationException(
+                                    "Could not retrieve Regal showtime list.");
+                            }
+                        }
                     }
                     var parsedContent = await JsonSerializer.DeserializeAsync<
                         RegalShowtimesResponse>(await result.Content.ReadAsStreamAsync());
@@ -368,6 +404,19 @@ namespace Theorem.Middleware
                 }
             }
             return returnValue;
+        }
+
+        private static void PretendToBeEdge(HttpRequestHeaders headers)
+        {
+            headers.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9," + 
+                "image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
+            headers.AcceptLanguage.ParseAdd("en-US,en;q=0.9");
+            headers.CacheControl = new CacheControlHeaderValue() {
+                NoCache = true, NoStore = true, MaxAge = TimeSpan.FromMinutes(0) };
+            headers.Pragma.ParseAdd("no-cache");
+            headers.Add("Priority", "u=0, i");
+            headers.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) " + 
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 Edg/133.0.0.0");
         }
 
         /// <summary>
