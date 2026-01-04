@@ -1,3 +1,7 @@
+# Archived
+
+This project has been superseded by [KelvinBot](https://github.com/haydenmc/KelvinBot).
+
 # Theorem Chat Bot
 
 Theorem is a generic chat bot I built for whatever the eff I want. 💅
